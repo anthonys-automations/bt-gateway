@@ -2,12 +2,12 @@
 # SPDX-License-Identifier: MIT
 
 set(ROOT_PATH
-    ${CMAKE_CURRENT_LIST_DIR}/../../../../../..
+    ${CMAKE_CURRENT_LIST_DIR}/../../../..
 )
 
-    file(GLOB_RECURSE COMPONENT_SOURCES
-        ${ROOT_PATH}/demos/sample_azure_iot/*.c
-    )
+file(GLOB_RECURSE COMPONENT_SOURCES
+    ${ROOT_PATH}/azure_iot/sample_azure_iot/*.c
+)
 
 # kconfig does not support multiline strings.
 # For certificates, we use as a workaround escaping the newlines
@@ -34,13 +34,13 @@ set(COMPONENT_INCLUDE_DIRS
     ${CMAKE_CURRENT_LIST_DIR}/../../config
     ${CMAKE_CURRENT_LIST_DIR}
     ${MBEDTLS_DIR}/mbedtls/include
-    ${ROOT_PATH}/demos/common/transport
-    ${ROOT_PATH}/demos/common/utilities
-    ${ROOT_PATH}/demos/common/connection
+    ${ROOT_PATH}/azure_iot/common/transport
+    ${ROOT_PATH}/azure_iot/common/utilities
+    ${ROOT_PATH}/azure_iot/common/connection
 )
 
-    idf_component_register(
-        SRCS ${COMPONENT_SOURCES}
-        INCLUDE_DIRS ${COMPONENT_INCLUDE_DIRS}
-        REQUIRES mbedtls tcp_transport coreMQTT azure-sdk-for-c azure-iot-middleware-freertos)
+idf_component_register(
+    SRCS ${COMPONENT_SOURCES}
+    INCLUDE_DIRS ${COMPONENT_INCLUDE_DIRS}
+    REQUIRES mbedtls tcp_transport coreMQTT azure-sdk-for-c azure-iot-middleware-freertos)
 
