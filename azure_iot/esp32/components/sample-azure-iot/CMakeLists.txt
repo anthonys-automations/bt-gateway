@@ -5,15 +5,9 @@ set(ROOT_PATH
     ${CMAKE_CURRENT_LIST_DIR}/../../../../../..
 )
 
-if (DEFINED CONFIG_AZURE_SAMPLE_USE_PLUG_AND_PLAY AND CONFIG_AZURE_SAMPLE_USE_PLUG_AND_PLAY MATCHES "y")
-    file(GLOB_RECURSE COMPONENT_SOURCES
-        ${ROOT_PATH}/demos/sample_azure_iot_pnp/*.c
-    )
-else()
     file(GLOB_RECURSE COMPONENT_SOURCES
         ${ROOT_PATH}/demos/sample_azure_iot/*.c
     )
-endif()
 
 # kconfig does not support multiline strings.
 # For certificates, we use as a workaround escaping the newlines
@@ -45,21 +39,8 @@ set(COMPONENT_INCLUDE_DIRS
     ${ROOT_PATH}/demos/common/connection
 )
 
-if (DEFINED CONFIG_AZURE_SAMPLE_USE_PLUG_AND_PLAY AND CONFIG_AZURE_SAMPLE_USE_PLUG_AND_PLAY MATCHES "y")
-    list(APPEND COMPONENT_INCLUDE_DIRS
-        ${ROOT_PATH}/demos/sample_azure_iot_pnp
-    )
-endif()
-
-if (DEFINED CONFIG_ESP_TLS_USE_SECURE_ELEMENT)
-    idf_component_register(
-        SRCS ${COMPONENT_SOURCES}
-        INCLUDE_DIRS ${COMPONENT_INCLUDE_DIRS}
-        REQUIRES mbedtls tcp_transport esp-cryptoauthlib coreMQTT azure-sdk-for-c azure-iot-middleware-freertos)
-else()
     idf_component_register(
         SRCS ${COMPONENT_SOURCES}
         INCLUDE_DIRS ${COMPONENT_INCLUDE_DIRS}
         REQUIRES mbedtls tcp_transport coreMQTT azure-sdk-for-c azure-iot-middleware-freertos)
-endif()
 
