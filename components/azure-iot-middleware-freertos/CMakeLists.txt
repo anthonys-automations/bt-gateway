@@ -4,7 +4,7 @@
 cmake_minimum_required(VERSION 3.19)
 
 set(ROOT_PATH
-    ${CMAKE_CURRENT_LIST_DIR}/../../../..
+    ${CMAKE_CURRENT_LIST_DIR}/../..
 )
 
 set(AZURE_IOT_MIDDLEWARE_FREERTOS
