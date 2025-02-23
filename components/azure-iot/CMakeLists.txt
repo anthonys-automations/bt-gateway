@@ -5,10 +5,6 @@ set(ROOT_PATH
     ${CMAKE_CURRENT_LIST_DIR}/../..
 )
 
-file(GLOB_RECURSE COMPONENT_SOURCES
-    ${ROOT_PATH}/azure_iot/sample_azure_iot/*.c
-)
-
 # kconfig does not support multiline strings.
 # For certificates, we use as a workaround escaping the newlines
 # in certificates and keys so they can be entered as a single
@@ -29,6 +25,7 @@ list(APPEND COMPONENT_SOURCES
     ${CMAKE_CURRENT_LIST_DIR}/transport_tls_esp32.c
     ${CMAKE_CURRENT_LIST_DIR}/crypto_esp32.c
     ${CMAKE_CURRENT_LIST_DIR}/connectivity.c
+    ${CMAKE_CURRENT_LIST_DIR}/azure_iot.c
 )
 
 set(COMPONENT_INCLUDE_DIRS

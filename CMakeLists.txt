@@ -6,4 +6,4 @@
 cmake_minimum_required(VERSION 3.13)
 
 include($ENV{IDF_PATH}/tools/cmake/project.cmake)
-project(azure_iot_freertos_esp32)
+project(bt-gateway-esp32)

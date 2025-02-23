@@ -28,7 +28,7 @@
 #include "esp_log.h"
 
 #ifndef LIBRARY_LOG_NAME
-    #define LIBRARY_LOG_NAME    "AzureIoTDemo"
+    #define LIBRARY_LOG_NAME    "BT-Gateway-ESP32"
 #endif
 
 #define SINGLE_PARENTHESIS_LOGE( x, ... )    ESP_LOGE( LIBRARY_LOG_NAME, x, ## __VA_ARGS__ )
