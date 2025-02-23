@@ -78,21 +78,21 @@
 /**
  * @brief The Telemetry message published in this example.
  */
-#define sampleazureiotMESSAGE                                 "Hello World : %d !"
+#define sampleazureiotMESSAGE                                 "{\"message\":\"Hello World %d!\"}"
 
 /**
  * @brief  The content type of the Telemetry message published in this example.
  * @remark Message properties must be url-encoded.
  *         This message property is not required to send telemetry.
  */
-#define sampleazureiotMESSAGE_CONTENT_TYPE                    "text%2Fplain"
+#define sampleazureiotMESSAGE_CONTENT_TYPE                    "application%2Fjson"
 
 /**
  * @brief  The content encoding of the Telemetry message published in this example.
  * @remark Message properties must be url-encoded.
  *         This message property is not required to send telemetry.
  */
-#define sampleazureiotMESSAGE_CONTENT_ENCODING                "us-ascii"
+#define sampleazureiotMESSAGE_CONTENT_ENCODING                "utf-8"
 
 /**
  * @brief The reported property payload to send to IoT Hub
