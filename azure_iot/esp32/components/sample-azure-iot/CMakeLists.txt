@@ -28,6 +28,7 @@ list(APPEND COMPONENT_SOURCES
     ${CMAKE_CURRENT_LIST_DIR}/backoff_algorithm.c
     ${CMAKE_CURRENT_LIST_DIR}/transport_tls_esp32.c
     ${CMAKE_CURRENT_LIST_DIR}/crypto_esp32.c
+    ${CMAKE_CURRENT_LIST_DIR}/connectivity.c
 )
 
 set(COMPONENT_INCLUDE_DIRS
@@ -42,5 +43,5 @@ set(COMPONENT_INCLUDE_DIRS
 idf_component_register(
     SRCS ${COMPONENT_SOURCES}
     INCLUDE_DIRS ${COMPONENT_INCLUDE_DIRS}
-    REQUIRES mbedtls tcp_transport coreMQTT azure-sdk-for-c azure-iot-middleware-freertos)
+    REQUIRES mbedtls tcp_transport coreMQTT azure-sdk-for-c azure-iot-middleware-freertos esp_wifi esp_event nvs_flash)
 
