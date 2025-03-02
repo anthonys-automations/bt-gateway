@@ -26,6 +26,7 @@ list(APPEND COMPONENT_SOURCES
     ${CMAKE_CURRENT_LIST_DIR}/crypto_esp32.c
     ${CMAKE_CURRENT_LIST_DIR}/connectivity.c
     ${CMAKE_CURRENT_LIST_DIR}/azure_iot.c
+    ${CMAKE_CURRENT_LIST_DIR}/systeminfo.c
 )
 
 set(COMPONENT_INCLUDE_DIRS
