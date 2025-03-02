@@ -1,0 +1,3 @@
+dependencies:
+  nimble_central_utils:
+    path: common/nimble_central_utils

@@ -28,6 +28,10 @@
 /* Crypto helper header. */
 #include "azure_sample_crypto.h"
 
+/* ESP-IDF includes */
+#include "esp_wifi.h"
+#include "esp_netif.h"
+
 /*-----------------------------------------------------------*/
 
 /* Compile time error for undefined configs. */
@@ -303,6 +307,17 @@ static uint32_t prvSetupNetworkCredentials( NetworkCredentials_t * pxNetworkCred
 /*-----------------------------------------------------------*/
 
 /**
+ * @brief Get WiFi MAC address
+ */
+static void prvGetWiFiMacAddress(char *macStr, size_t maxLen) {
+    uint8_t mac[6];
+    esp_wifi_get_mac(WIFI_IF_STA, mac);
+    snprintf(macStr, maxLen, "%02X:%02X:%02X:%02X:%02X:%02X",
+             mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
+    LogInfo(("Device WiFi MAC Address: %s", macStr));
+}
+
+/**
  * @brief Azure IoT demo task that gets started in the platform specific project.
  *  In this demo task, middleware API's are used to connect to Azure IoT Hub.
  */
@@ -422,6 +437,24 @@ static void prvAzureDemoTask( void * pvParameters )
             /* Get property document after initial connection */
             xResult = AzureIoTHubClient_RequestPropertiesAsync( &xAzureIoTHubClient );
             configASSERT( xResult == eAzureIoTSuccess );
+
+            /* Send device MAC address as reported property */
+            char macAddress[18];
+            prvGetWiFiMacAddress(macAddress, sizeof(macAddress));
+            
+            LogInfo(("Sending device MAC address as reported property..."));
+            ulScratchBufferLength = snprintf((char*)ucScratchBuffer, sizeof(ucScratchBuffer),
+                "{ \"deviceInfo\": { \"wifiMacAddress\": \"%s\" } }", macAddress);
+                
+            xResult = AzureIoTHubClient_SendPropertiesReported(&xAzureIoTHubClient,
+                ucScratchBuffer, ulScratchBufferLength, NULL);
+            
+            if (xResult == eAzureIoTSuccess) {
+                LogInfo(("Successfully sent MAC address to device twin"));
+            } else {
+                LogError(("Failed to send MAC address to device twin, error: %d", xResult));
+            }
+            configASSERT(xResult == eAzureIoTSuccess);
 
             /* Create a bag of properties for the telemetry */
             xResult = AzureIoTMessage_PropertiesInit( &xPropertyBag, ucPropertyBuffer, 0, sizeof( ucPropertyBuffer ) );
