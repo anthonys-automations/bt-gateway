@@ -32,6 +32,9 @@
 #include "esp_wifi.h"
 #include "esp_netif.h"
 
+/* Include the sensors header file */
+#include "sensors.h"
+
 /*-----------------------------------------------------------*/
 
 /* Compile time error for undefined configs. */
@@ -482,12 +485,22 @@ static void prvAzureDemoTask( void * pvParameters )
                  lPublishCount < lMaxPublishCount && xAzureSample_IsConnectedToInternet();
                  lPublishCount++ )
             {
-                ulScratchBufferLength = snprintf( ( char * ) ucScratchBuffer, sizeof( ucScratchBuffer ),
-                                                  sampleazureiotMESSAGE, lPublishCount );
-                xResult = AzureIoTHubClient_SendTelemetry( &xAzureIoTHubClient,
-                                                           ucScratchBuffer, ulScratchBufferLength,
-                                                           &xPropertyBag, eAzureIoTHubMessageQoS1, NULL );
-                configASSERT( xResult == eAzureIoTSuccess );
+                // Get sensor data instead of using static message
+                esp_err_t err = sensors_get_json((char *)ucScratchBuffer, sizeof(ucScratchBuffer));
+                if (err != ESP_OK) {
+                    LogError(("Failed to get sensor data, error: %d", err));
+                    // Fallback to a basic message if sensor reading fails
+                    ulScratchBufferLength = snprintf((char *)ucScratchBuffer, sizeof(ucScratchBuffer),
+                                                    "{\"error\":\"Failed to read sensors\",\"count\":%d}", lPublishCount);
+                } else {
+                    ulScratchBufferLength = strlen((char *)ucScratchBuffer);
+                    LogInfo(("Sending sensor data: %s", ucScratchBuffer));
+                }
+                
+                xResult = AzureIoTHubClient_SendTelemetry(&xAzureIoTHubClient,
+                                                         ucScratchBuffer, ulScratchBufferLength,
+                                                         &xPropertyBag, eAzureIoTHubMessageQoS1, NULL);
+                configASSERT(xResult == eAzureIoTSuccess);
 
                 LogInfo( ( "Attempt to receive publish message from IoT Hub.\r\n" ) );
                 xResult = AzureIoTHubClient_ProcessLoop( &xAzureIoTHubClient,

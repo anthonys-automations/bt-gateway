@@ -8,5 +8,5 @@ set(COMPONENT_INCLUDE_DIRS
 
 idf_component_register(SRCS "main.c"
                     INCLUDE_DIRS ${COMPONENT_INCLUDE_DIRS}
-                    REQUIRES esp_event esp_wifi freertos nvs_flash coreMQTT azure-sdk-for-c azure-iot-middleware-freertos azure-iot)
+                    REQUIRES esp_event esp_wifi freertos nvs_flash coreMQTT azure-sdk-for-c azure-iot-middleware-freertos azure-iot sensors)
 
