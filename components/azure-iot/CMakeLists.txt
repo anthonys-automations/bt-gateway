@@ -33,9 +33,9 @@ set(COMPONENT_INCLUDE_DIRS
     ${CMAKE_CURRENT_LIST_DIR}/../../config
     ${CMAKE_CURRENT_LIST_DIR}
     ${MBEDTLS_DIR}/mbedtls/include
-    ${ROOT_PATH}/azure_iot/common/transport
-    ${ROOT_PATH}/azure_iot/common/utilities
-    ${ROOT_PATH}/azure_iot/common/connection
+    common/transport
+    common/utilities
+    common/connection
 )
 
 idf_component_register(
