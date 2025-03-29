@@ -32,13 +32,17 @@
 #include "esp_wifi.h"
 #include "esp_netif.h"
 
-/* Include the sensors header file */
-#include "sensors.h"
 #include "azure_iot.h"
 
 
 // Define the queue handle at file scope - make it global to the module
 static QueueHandle_t xTelemetryQueue = NULL;
+    
+// Create a message structure that includes the length
+typedef struct {
+    uint8_t data[128]; // Fixed buffer size
+    size_t length;     // Actual data length
+} TelemetryMessage_t;
 
 /**
  * @brief Gets the handle to the telemetry queue, creating it if it doesn't exist
@@ -46,11 +50,17 @@ static QueueHandle_t xTelemetryQueue = NULL;
  */
 QueueHandle_t azure_iot_get_telemetry_queue(void)
 {
-    // Create the queue if it doesn't exist
+    static QueueHandle_t xTelemetryQueue = NULL;
+    
     if (xTelemetryQueue == NULL) {
-        xTelemetryQueue = xQueueCreate(5, sizeof(uint8_t) * 128); // Assuming max message size of 128 bytes
-        configASSERT(xTelemetryQueue != NULL);
-        LogInfo(("Telemetry queue created successfully"));
+        // Create a queue to hold 10 message structures (adjust as needed)
+        xTelemetryQueue = xQueueCreate(10, sizeof(TelemetryMessage_t));
+        
+        if (xTelemetryQueue == NULL) {
+            LogError(("Failed to create telemetry queue"));
+        } else {
+            LogInfo(("Telemetry queue created successfully"));
+        }
     }
     
     return xTelemetryQueue;
@@ -67,19 +77,32 @@ BaseType_t azure_iot_queue_telemetry(uint8_t *pucMessage, size_t xMessageLength)
     // Get queue handle (creates if needed)
     QueueHandle_t xQueue = azure_iot_get_telemetry_queue();
     
+    TelemetryMessage_t message;
+    
     // Ensure we don't exceed the queue item size
-    size_t maxSize = 128; // Should match the size used in queue creation
-    if (xMessageLength > maxSize) {
-        xMessageLength = maxSize;
+    if (xMessageLength > sizeof(message.data)) {
+        xMessageLength = sizeof(message.data);
         LogWarn(("Message truncated to fit queue item size"));
     }
+
+    // Before sending to queue
+    UBaseType_t uxQueueSpaces = uxQueueSpacesAvailable(xQueue);
+    LogInfo(("Queue has %d spaces available before adding new message", uxQueueSpaces));
+
+    if (uxQueueSpaces < 2) { // Getting low on space
+        LogWarn(("Telemetry queue is nearly full! (%d spaces left)", uxQueueSpaces));
+    }
+
+    // Copy message data and length
+    memcpy(message.data, pucMessage, xMessageLength);
+    message.length = xMessageLength;
     
     // Put message into queue
-    BaseType_t xStatus = xQueueSendToBack(xQueue, pucMessage, pdMS_TO_TICKS(100));
+    BaseType_t xStatus = xQueueSendToBack(xQueue, &message, pdMS_TO_TICKS(1000)); // Increased timeout
     if (xStatus != pdPASS) {
-        LogError(("Failed to send message to queue"));
+        LogError(("Failed to send message to queue - queue might be full"));
     } else {
-        LogInfo(("Message added to telemetry queue"));
+        LogInfo(("Message added to telemetry queue, length: %d", xMessageLength));
     }
 
     return xStatus;
@@ -535,36 +558,25 @@ static void prvAzureDemoTask( void * pvParameters )
                  lPublishCount < lMaxPublishCount && xAzureSample_IsConnectedToInternet();
                  lPublishCount++ )
             {
-                // Define the queue handle if not already defined
-                static QueueHandle_t xTelemetryQueue = NULL;
-                
-                // Get sensor data instead of using static message
-                esp_err_t err = sensors_get_json((char *)ucScratchBuffer, sizeof(ucScratchBuffer));
-                if (err != ESP_OK) {
-                    LogError(("Failed to get sensor data, error: %d", err));
-                    // Fallback to a basic message if sensor reading fails
-                    ulScratchBufferLength = snprintf((char *)ucScratchBuffer, sizeof(ucScratchBuffer),
-                                                    "{\"error\":\"Failed to read sensors\",\"count\":%d}", lPublishCount);
-                } else {
-                    ulScratchBufferLength = strlen((char *)ucScratchBuffer);
-                    LogInfo(("Sensor data prepared: %s", ucScratchBuffer));
-                }
-                
-                // Queue the telemetry data
-                azure_iot_queue_telemetry(ucScratchBuffer, ulScratchBufferLength);
-                
                 // Wait to receive the message from the queue
                 QueueHandle_t xQueue = azure_iot_get_telemetry_queue();
                 if (xQueue != NULL) {
-                    if (xQueueReceive(xQueue, ucScratchBuffer, pdMS_TO_TICKS(1000)) == pdTRUE) {
-                        LogInfo(("Retrieved message from queue, sending to Azure IoT Hub"));
+                    TelemetryMessage_t receivedMessage;
+                    
+                    if (xQueueReceive(xQueue, &receivedMessage, pdMS_TO_TICKS(1000)) == pdTRUE) {
+                        LogInfo(("Retrieved message from queue, length: %d, sending to Azure IoT Hub", 
+                                receivedMessage.length));
+                        
+                        // Copy data to scratch buffer if needed, or use directly
+                        memcpy(ucScratchBuffer, receivedMessage.data, receivedMessage.length);
+                        ulScratchBufferLength = receivedMessage.length;
                         
                         xResult = AzureIoTHubClient_SendTelemetry(&xAzureIoTHubClient,
                                                                  ucScratchBuffer, ulScratchBufferLength,
                                                                  &xPropertyBag, eAzureIoTHubMessageQoS1, NULL);
                         configASSERT(xResult == eAzureIoTSuccess);
                     } else {
-                        LogError(("Failed to retrieve message from queue"));
+                        LogInfo(("No message in telemetry queue to process"));
                     }
                 } else {
                     LogError(("Telemetry queue not available"));

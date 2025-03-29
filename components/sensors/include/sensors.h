@@ -31,6 +31,8 @@ esp_err_t sensors_get_json(char *buffer, size_t buffer_size);
  */
 esp_err_t sensors_deinit(void);
 
+void vStartSensorsLoop( void );
+
 #ifdef __cplusplus
 }
 #endif
