@@ -34,6 +34,56 @@
 
 /* Include the sensors header file */
 #include "sensors.h"
+#include "azure_iot.h"
+
+
+// Define the queue handle at file scope - make it global to the module
+static QueueHandle_t xTelemetryQueue = NULL;
+
+/**
+ * @brief Gets the handle to the telemetry queue, creating it if it doesn't exist
+ * @return QueueHandle_t Handle to the telemetry queue
+ */
+QueueHandle_t azure_iot_get_telemetry_queue(void)
+{
+    // Create the queue if it doesn't exist
+    if (xTelemetryQueue == NULL) {
+        xTelemetryQueue = xQueueCreate(5, sizeof(uint8_t) * 128); // Assuming max message size of 128 bytes
+        configASSERT(xTelemetryQueue != NULL);
+        LogInfo(("Telemetry queue created successfully"));
+    }
+    
+    return xTelemetryQueue;
+}
+
+/**
+ * @brief Adds a message to the telemetry queue
+ * @param pucMessage Pointer to the message buffer
+ * @param xMessageLength Length of the message
+ * @return BaseType_t pdPASS on success, pdFAIL on failure
+ */
+BaseType_t azure_iot_queue_telemetry(uint8_t *pucMessage, size_t xMessageLength)
+{
+    // Get queue handle (creates if needed)
+    QueueHandle_t xQueue = azure_iot_get_telemetry_queue();
+    
+    // Ensure we don't exceed the queue item size
+    size_t maxSize = 128; // Should match the size used in queue creation
+    if (xMessageLength > maxSize) {
+        xMessageLength = maxSize;
+        LogWarn(("Message truncated to fit queue item size"));
+    }
+    
+    // Put message into queue
+    BaseType_t xStatus = xQueueSendToBack(xQueue, pucMessage, pdMS_TO_TICKS(100));
+    if (xStatus != pdPASS) {
+        LogError(("Failed to send message to queue"));
+    } else {
+        LogInfo(("Message added to telemetry queue"));
+    }
+
+    return xStatus;
+}
 
 /*-----------------------------------------------------------*/
 
@@ -485,6 +535,9 @@ static void prvAzureDemoTask( void * pvParameters )
                  lPublishCount < lMaxPublishCount && xAzureSample_IsConnectedToInternet();
                  lPublishCount++ )
             {
+                // Define the queue handle if not already defined
+                static QueueHandle_t xTelemetryQueue = NULL;
+                
                 // Get sensor data instead of using static message
                 esp_err_t err = sensors_get_json((char *)ucScratchBuffer, sizeof(ucScratchBuffer));
                 if (err != ESP_OK) {
@@ -494,14 +547,30 @@ static void prvAzureDemoTask( void * pvParameters )
                                                     "{\"error\":\"Failed to read sensors\",\"count\":%d}", lPublishCount);
                 } else {
                     ulScratchBufferLength = strlen((char *)ucScratchBuffer);
-                    LogInfo(("Sending sensor data: %s", ucScratchBuffer));
+                    LogInfo(("Sensor data prepared: %s", ucScratchBuffer));
                 }
                 
-                xResult = AzureIoTHubClient_SendTelemetry(&xAzureIoTHubClient,
-                                                         ucScratchBuffer, ulScratchBufferLength,
-                                                         &xPropertyBag, eAzureIoTHubMessageQoS1, NULL);
-                configASSERT(xResult == eAzureIoTSuccess);
-
+                // Queue the telemetry data
+                azure_iot_queue_telemetry(ucScratchBuffer, ulScratchBufferLength);
+                
+                // Wait to receive the message from the queue
+                QueueHandle_t xQueue = azure_iot_get_telemetry_queue();
+                if (xQueue != NULL) {
+                    if (xQueueReceive(xQueue, ucScratchBuffer, pdMS_TO_TICKS(1000)) == pdTRUE) {
+                        LogInfo(("Retrieved message from queue, sending to Azure IoT Hub"));
+                        
+                        xResult = AzureIoTHubClient_SendTelemetry(&xAzureIoTHubClient,
+                                                                 ucScratchBuffer, ulScratchBufferLength,
+                                                                 &xPropertyBag, eAzureIoTHubMessageQoS1, NULL);
+                        configASSERT(xResult == eAzureIoTSuccess);
+                    } else {
+                        LogError(("Failed to retrieve message from queue"));
+                    }
+                } else {
+                    LogError(("Telemetry queue not available"));
+                    // Add appropriate error handling or delay
+                    vTaskDelay(pdMS_TO_TICKS(1000));
+                }
                 LogInfo( ( "Attempt to receive publish message from IoT Hub.\r\n" ) );
                 xResult = AzureIoTHubClient_ProcessLoop( &xAzureIoTHubClient,
                                                          sampleazureiotPROCESS_LOOP_TIMEOUT_MS );
@@ -730,3 +799,4 @@ void vStartDemoTask( void )
                  NULL );                   /* Used to pass out a handle to the created task - not used in this case. */
 }
 /*-----------------------------------------------------------*/
+
