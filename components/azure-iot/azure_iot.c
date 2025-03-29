@@ -35,12 +35,9 @@
 #include "azure_iot.h"
 
 
-// Define the queue handle at file scope - make it global to the module
-static QueueHandle_t xTelemetryQueue = NULL;
-    
 // Create a message structure that includes the length
 typedef struct {
-    uint8_t data[128]; // Fixed buffer size
+    uint8_t data[ AZURE_IOT_TELEMETRY_MAXLEN ]; // Fixed buffer size
     size_t length;     // Actual data length
 } TelemetryMessage_t;
 

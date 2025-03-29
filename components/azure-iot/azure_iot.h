@@ -1,4 +1,9 @@
 /**
+ * @brief Maximum size of Azure IoT Telemetry message.
+ */
+#define AZURE_IOT_TELEMETRY_MAXLEN          ( 256 )
+
+/**
  * @brief Adds a message to the telemetry queue
  * @param pucMessage Pointer to the message buffer
  * @param xMessageLength Length of the message

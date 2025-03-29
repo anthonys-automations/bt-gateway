@@ -5,6 +5,7 @@
 #include "FreeRTOS.h"
 #include "task.h"
 
+#include "esp_log.h"
 #include "esp_err.h"
 #include "esp_temp_sensor.h"
 
@@ -12,34 +13,6 @@
 #include "azure_iot.h"
 
 static const char *TAG = "sensors";
-
-/*
- * Include logging header files and define logging macros in the following order:
- * 1. Include the header file "esp_log.h".
- * 2. Define the LIBRARY_LOG_NAME and LIBRARY_LOG_LEVEL macros depending on
- * the logging configuration for DEMO.
- * 3. Define macros to replace module logging functions by esp logging functions.
- */
-
-#include "esp_log.h"
-
-#ifndef LIBRARY_LOG_NAME
-    #define LIBRARY_LOG_NAME    "sensors"
-#endif
-
-#define SINGLE_PARENTHESIS_LOGE( x, ... )    ESP_LOGE( LIBRARY_LOG_NAME, x, ## __VA_ARGS__ )
-#define LogError( message )                  SINGLE_PARENTHESIS_LOGE message
-
-#define SINGLE_PARENTHESIS_LOGI( x, ... )    ESP_LOGI( LIBRARY_LOG_NAME, x, ## __VA_ARGS__ )
-#define LogInfo( message )                   SINGLE_PARENTHESIS_LOGI message
-
-#define SINGLE_PARENTHESIS_LOGW( x, ... )    ESP_LOGW( LIBRARY_LOG_NAME, x, ## __VA_ARGS__ )
-#define LogWarn( message )                   SINGLE_PARENTHESIS_LOGW message
-
-#define SINGLE_PARENTHESIS_LOGD( x, ... )    ESP_LOGD( LIBRARY_LOG_NAME, x, ## __VA_ARGS__ )
-#define LogDebug( message )                  SINGLE_PARENTHESIS_LOGD message
-
-/************ End of logging configuration ****************/
 
 esp_err_t sensors_init(void)
 {
@@ -55,7 +28,7 @@ esp_err_t sensors_init(void)
     return ESP_OK;
 }
 
-static uint8_t TelemetryBuffer[ 128 ];
+static uint8_t TelemetryBuffer[ AZURE_IOT_TELEMETRY_MAXLEN ];
 uint32_t TelemetryBufferLength = 0U;
 
 static void sensors_loop( void * pvParameters )
@@ -69,13 +42,13 @@ static void sensors_loop( void * pvParameters )
     {
         err = sensors_get_json((char *)TelemetryBuffer, sizeof(TelemetryBuffer));
         if (err != ESP_OK) {
-            LogError(("Failed to get sensor data, error: %d", err));
+            ESP_LOGE(TAG, "Failed to get sensor data, error: %d", err);
             // Fallback to a basic message if sensor reading fails
             TelemetryBufferLength = snprintf((char *)TelemetryBuffer, sizeof(TelemetryBuffer),
                                             "{\"error\":\"Failed to read sensors\"}");
         } else {
             TelemetryBufferLength = strlen((char *)TelemetryBuffer);
-            LogInfo(("Sensor data prepared: %s", TelemetryBuffer));
+            ESP_LOGI(TAG, "Sensor data prepared: %s", TelemetryBuffer);
         }
         
         // Queue the telemetry data
@@ -97,7 +70,12 @@ esp_err_t sensors_get_json(char *buffer, size_t buffer_size)
         return ret;
     }
     
-    int written = snprintf(buffer, buffer_size, "{\"esp_temperature\":%.1f}", temperature);
+    // Get uptime in seconds
+    uint32_t uptime_seconds = (uint32_t)(xTaskGetTickCount() / configTICK_RATE_HZ);
+    
+    int written = snprintf(buffer, buffer_size, 
+                          "{\"esp_temperature\":%.1f,\"uptime_seconds\":%u}", 
+                          temperature, (unsigned int)uptime_seconds);
     
     if (written < 0 || written >= buffer_size) {
         return ESP_ERR_NOT_ALLOWED;
@@ -105,7 +83,6 @@ esp_err_t sensors_get_json(char *buffer, size_t buffer_size)
     
     return ESP_OK;
 }
-
 esp_err_t sensors_deinit(void)
 {
     ESP_LOGI(TAG, "Deinitializing sensors");

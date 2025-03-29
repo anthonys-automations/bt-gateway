@@ -3,9 +3,9 @@
 
 #include "azure_sample_connection.h"
 #include "sensors.h"
+#include "azure_iot.h"
 
 extern void vStartDemoTask(void);
-extern void connectivity_init(void);
 
 void app_main(void)
 {
