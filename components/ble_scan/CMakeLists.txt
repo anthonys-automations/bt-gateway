@@ -1,2 +1,3 @@
-idf_component_register(SRCS "ble_scan.c" 
-                       INCLUDE_DIRS ".")
+idf_component_register(SRCS  
+                       INCLUDE_DIRS "."
+                       REQUIRES nvs_flash)

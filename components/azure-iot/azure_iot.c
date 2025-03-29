@@ -110,7 +110,7 @@
  * @brief Time in ticks to wait between each cycle of the demo implemented
  * by prvMQTTDemoTask().
  */
-#define sampleazureiotDELAY_BETWEEN_DEMO_ITERATIONS_TICKS     ( pdMS_TO_TICKS( 5000U ) )
+#define sampleazureiotDELAY_BETWEEN_DEMO_ITERATIONS_TICKS     ( pdMS_TO_TICKS( 50000U ) )
 
 /**
  * @brief Timeout for MQTT_ProcessLoop in milliseconds.
@@ -124,7 +124,7 @@
  * Note that the process loop also has a timeout, so the total time between
  * publishes is the sum of the two delays.
  */
-#define sampleazureiotDELAY_BETWEEN_PUBLISHES_TICKS           ( pdMS_TO_TICKS( 2000U ) )
+#define sampleazureiotDELAY_BETWEEN_PUBLISHES_TICKS           ( pdMS_TO_TICKS( 20000U ) )
 
 /**
  * @brief Transport timeout in milliseconds for transport send and receive.
@@ -476,8 +476,8 @@ static void prvAzureDemoTask( void * pvParameters )
             configASSERT( xResult == eAzureIoTSuccess );
 
             /* How to send an user-defined custom property. */
-            xResult = AzureIoTMessage_PropertiesAppend( &xPropertyBag, ( uint8_t * ) "name", sizeof( "name" ) - 1,
-                                                        ( uint8_t * ) "value", sizeof( "value" ) - 1 );
+            xResult = AzureIoTMessage_PropertiesAppend( &xPropertyBag, ( uint8_t * ) "source", sizeof( "source" ) - 1,
+                                                        ( uint8_t * ) "sample-test-name", sizeof( "sample-test-name" ) - 1 );
             configASSERT( xResult == eAzureIoTSuccess );
 
             /* Publish messages with QoS1, send and process Keep alive messages. */
