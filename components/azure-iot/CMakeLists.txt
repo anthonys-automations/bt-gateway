@@ -25,7 +25,7 @@ list(APPEND COMPONENT_SOURCES
     ${CMAKE_CURRENT_LIST_DIR}/transport_tls_esp32.c
     ${CMAKE_CURRENT_LIST_DIR}/crypto_esp32.c
     ${CMAKE_CURRENT_LIST_DIR}/connectivity.c
-    ${CMAKE_CURRENT_LIST_DIR}/azure_iot.c
+    ${CMAKE_CURRENT_LIST_DIR}/azure-iot.c
     ${CMAKE_CURRENT_LIST_DIR}/systeminfo.c
 )
 
@@ -33,6 +33,7 @@ set(COMPONENT_INCLUDE_DIRS
     ${CMAKE_CURRENT_LIST_DIR}/../../config
     ${CMAKE_CURRENT_LIST_DIR}
     ${MBEDTLS_DIR}/mbedtls/include
+    include
     common/transport
     common/utilities
     common/connection

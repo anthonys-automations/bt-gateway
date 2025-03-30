@@ -32,7 +32,7 @@
 #include "esp_wifi.h"
 #include "esp_netif.h"
 
-#include "azure_iot.h"
+#include "azure-iot.h"
 
 
 // Create a message structure that includes the length
@@ -555,12 +555,13 @@ static void prvAzureDemoTask( void * pvParameters )
                  lPublishCount < lMaxPublishCount && xAzureSample_IsConnectedToInternet();
                  lPublishCount++ )
             {
-                // Wait to receive the message from the queue
                 QueueHandle_t xQueue = azure_iot_get_telemetry_queue();
                 if (xQueue != NULL) {
                     TelemetryMessage_t receivedMessage;
                     
-                    if (xQueueReceive(xQueue, &receivedMessage, pdMS_TO_TICKS(1000)) == pdTRUE) {
+                    for (int i = 0;
+                         i < 10 && xQueueReceive(xQueue, &receivedMessage, pdMS_TO_TICKS(1000)) == pdTRUE;
+                         i++) {
                         LogInfo(("Retrieved message from queue, length: %d, sending to Azure IoT Hub", 
                                 receivedMessage.length));
                         
@@ -572,8 +573,6 @@ static void prvAzureDemoTask( void * pvParameters )
                                                                  ucScratchBuffer, ulScratchBufferLength,
                                                                  &xPropertyBag, eAzureIoTHubMessageQoS1, NULL);
                         configASSERT(xResult == eAzureIoTSuccess);
-                    } else {
-                        LogInfo(("No message in telemetry queue to process"));
                     }
                 } else {
                     LogError(("Telemetry queue not available"));
@@ -597,6 +596,7 @@ static void prvAzureDemoTask( void * pvParameters )
                 }
 
                 /* Leave Connection Idle for some time. */
+                LogInfo( ( "This thread has %u bytes free stack\n", uxTaskGetStackHighWaterMark(NULL) ) );
                 LogInfo( ( "Keeping Connection Idle...\r\n\r\n" ) );
                 vTaskDelay( sampleazureiotDELAY_BETWEEN_PUBLISHES_TICKS );
             }
@@ -796,13 +796,13 @@ static uint32_t prvConnectToServerWithBackoffRetries( const char * pcHostName,
 /*
  * @brief Create the task that demonstrates the AzureIoTHub demo
  */
-void vStartDemoTask( void )
+void vStartAzureIoT( void )
 {
     /* This example uses a single application task, which in turn is used to
      * connect, subscribe, publish, unsubscribe and disconnect from the IoT Hub */
     xTaskCreate( prvAzureDemoTask,         /* Function that implements the task. */
                  "AzureDemoTask",          /* Text name for the task - only used for debugging. */
-                 democonfigDEMO_STACKSIZE, /* Size of stack (in words, not bytes) to allocate for the task. */
+                 8192, /* Size of stack (in words, not bytes) to allocate for the task. */
                  NULL,                     /* Task parameter - not used in this case. */
                  tskIDLE_PRIORITY,         /* Task priority, must be between 0 and configMAX_PRIORITIES - 1. */
                  NULL );                   /* Used to pass out a handle to the created task - not used in this case. */

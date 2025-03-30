@@ -10,7 +10,7 @@
 #include "esp_temp_sensor.h"
 
 #include "sensors.h"
-#include "azure_iot.h"
+#include "azure-iot.h"
 
 static const char *TAG = "sensors";
 
@@ -53,6 +53,8 @@ static void sensors_loop( void * pvParameters )
         
         // Queue the telemetry data
         azure_iot_queue_telemetry(TelemetryBuffer, TelemetryBufferLength);
+
+        ESP_LOGI(TAG, "This thread has %u bytes free stack\n", uxTaskGetStackHighWaterMark(NULL));
         vTaskDelay( pdMS_TO_TICKS( 32000U ) );
     }
 }
@@ -101,11 +103,12 @@ esp_err_t sensors_deinit(void)
  */
 void vStartSensorsLoop( void )
 {
+
     /* This example uses a single application task, which in turn is used to
      * connect, subscribe, publish, unsubscribe and disconnect from the IoT Hub */
     xTaskCreate( sensors_loop,         /* Function that implements the task. */
                  "SensorsLoop",          /* Text name for the task - only used for debugging. */
-                 4096, /* Size of stack (in words, not bytes) to allocate for the task. */
+                 8192, /* Size of stack (in words, not bytes) to allocate for the task. */
                  NULL,                     /* Task parameter - not used in this case. */
                  tskIDLE_PRIORITY,         /* Task priority, must be between 0 and configMAX_PRIORITIES - 1. */
                  NULL );                   /* Used to pass out a handle to the created task - not used in this case. */

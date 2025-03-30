@@ -1,7 +1,11 @@
 /**
  * @brief Maximum size of Azure IoT Telemetry message.
  */
-#define AZURE_IOT_TELEMETRY_MAXLEN          ( 256 )
+#define AZURE_IOT_TELEMETRY_MAXLEN          ( 2048 )
+
+#include <stdio.h>
+#include "FreeRTOS.h"
+
 
 /**
  * @brief Adds a message to the telemetry queue
@@ -14,4 +18,4 @@ BaseType_t azure_iot_queue_telemetry(uint8_t *pucMessage, size_t xMessageLength)
 /*
  * @brief Create the task that demonstrates the AzureIoTHub demo
  */
-void vStartDemoTask( void );
+void vStartAzureIoT( void );
