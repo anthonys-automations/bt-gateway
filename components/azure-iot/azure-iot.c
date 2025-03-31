@@ -423,6 +423,9 @@ static void prvAzureDemoTask( void * pvParameters )
 
     ( void ) pvParameters;
 
+    // Delay before initializing Azure IoT
+    vTaskDelay( pdMS_TO_TICKS( 17000U ) );
+
     /* Initialize Azure IoT Middleware.  */
     configASSERT( AzureIoT_Init() == eAzureIoTSuccess );
 

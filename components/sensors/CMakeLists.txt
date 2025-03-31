@@ -1,5 +1,6 @@
 set(EXCLUDE_COMPONENTS esp_lcd)
 
-idf_component_register(SRCS "sensors.c" "esp_temp_sensor.c"
+idf_component_register(SRCS "sensors.c" "esp_temp_sensor.c" "esp32-hdc1080/hdc1080.c" "esp32-hdc1080/hdc1080_main.c"
                     INCLUDE_DIRS "include"
-                    REQUIRES driver azure-iot)
+                    PRIV_INCLUDE_DIRS "esp32-hdc1080/include"
+                    REQUIRES driver azure-iot esp_timer esp_system esp_event)

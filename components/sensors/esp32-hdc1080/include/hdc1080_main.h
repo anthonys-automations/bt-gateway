@@ -1,0 +1,10 @@
+
+#define CONFIG_HDC1080_I2C_SDA 5
+#define CONFIG_HDC1080_I2C_SCL 6
+#define CONFIG_HDC1080_I2C_PORT_NUMBER 0
+#define CONFIG_HDC1080_I2C_PORT_FREQUENCY 400000
+#define CONFIG_HDC1080_I2C_PULLUPS 1
+#define CONFIG_HDC1080_I2C_SCAN_FOR_DEVICES y
+
+void hdc1080_main_init(void);
+void hdc1080_main_request_readings(void);

@@ -10,6 +10,7 @@
 #include "esp_temp_sensor.h"
 
 #include "sensors.h"
+#include "hdc1080_main.h"
 #include "azure-iot.h"
 
 static const char *TAG = "sensors";
@@ -36,10 +37,13 @@ static void sensors_loop( void * pvParameters )
     ( void ) pvParameters;
 
     sensors_init();
+    hdc1080_main_init();
     esp_err_t err;
 
     for( ; ; )
     {
+        hdc1080_main_request_readings();
+    
         err = sensors_get_json((char *)TelemetryBuffer, sizeof(TelemetryBuffer));
         if (err != ESP_OK) {
             ESP_LOGE(TAG, "Failed to get sensor data, error: %d", err);
@@ -55,6 +59,7 @@ static void sensors_loop( void * pvParameters )
         azure_iot_queue_telemetry(TelemetryBuffer, TelemetryBufferLength);
 
         ESP_LOGI(TAG, "This thread has %u bytes free stack\n", uxTaskGetStackHighWaterMark(NULL));
+        ESP_LOGI(TAG, "Minimum free heap size: %"PRIu32" bytes\n", esp_get_minimum_free_heap_size());
         vTaskDelay( pdMS_TO_TICKS( 32000U ) );
     }
 }
