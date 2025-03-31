@@ -35,6 +35,9 @@ void temperature_readings_callback(hdc1080_sensor_readings_t sens_readings){
   ESP_LOGI("HDC1080_SENSOR_DATA", "HUMIDITY: %.2f%%  -  DEWPOINT: %.2f°C | %.2f°F", sens_readings.humidity, dewpoint, CEL2FAH(dewpoint));
   ESP_LOGI("HDC1080_SENSOR_DATA", "AIR SATURATION VAPOR PRESSURE: %.2f kPa  -  AIR VAPOR PRESSURE DEFICIT: %.2f kPa", PAS2KPA(sat_vp), vpd_pasc);
 
+  // Set GPIO 4 low
+  gpio_set_level(4, 0);
+      
   snprintf((char *)TelemetryBuffer, sizeof(TelemetryBuffer), 
          "{\"hdc1080_temperature\":%.2f,\"hdc1080_humidity\":%.2f}", 
          sens_readings.temperature, sens_readings.humidity);
@@ -47,13 +50,30 @@ void temperature_readings_callback(hdc1080_sensor_readings_t sens_readings){
 }
 
 void hdc1080_main_request_readings(void){
-  // DO A REQUEST FOR THE SENSOR READINGS 
-  // THIS WILL CALLBACK TO void temperature_readings_callback(hdc1080_sensor_readings_t sens_readings)
-  // AS SET IN THE hdc_settings
-
   // Set GPIO 4 high
   gpio_set_level(4, 1);
-      
+
+  // FILL IN YOUR HDC SETTINGS
+  hdc1080_settings_t hdc_settings = {
+    .i2c_address = HDC1080_I2C_ADDRESS,
+    .i2c_port_number = CONFIG_HDC1080_I2C_PORT_NUMBER,
+    .timeout_length = I2C_READ_TIMEOUT_PERIOD,
+    .callback = temperature_readings_callback
+  };
+  
+  // SETUP YOUR HDC REGISTER CONFIGURATION
+  hdc1080_config_t hdc_config = {
+    .humidity_measurement_resolution = HDC1080_HUMIDITY_RESOLUTION_14BIT,
+    .temperature_measurement_resolution = HDC1080_TEMPERATURE_RESOLUTION_14BIT,
+    .mode_of_acquisition = HDC1080_ACQUISITION_HUMIDITY_AND_TEMPERATURE,
+    .heater = HDC1080_HEATER_DISABLED
+  };
+
+  // SETUP AND CONFIGURE THE SENSOR AND ABSTRACTION
+  if(hdc1080_configure(&hdc_settings, hdc_config) == ESP_OK){
+    ESP_LOGI("HDC1080_MAIN", "HDC1080 CONFIGURATION SUCCESSFUL");
+  }
+
   if(hdc1080_request_readings() == ESP_OK){
     ESP_LOGI("HDC1080_MAIN", "READINGS WERE REQUESTED");
   }
@@ -74,39 +94,7 @@ void hdc1080_main_init(void){
   gpio_set_level(4, 1);
 
   // CONFIGURE YOUR I2C BUS
-  if(i2c_init()){
-    // FILL IN YOUR HDC SETTINGS
-    hdc1080_settings_t hdc_settings = {
-      .i2c_address = HDC1080_I2C_ADDRESS,
-      .i2c_port_number = CONFIG_HDC1080_I2C_PORT_NUMBER,
-      .timeout_length = I2C_READ_TIMEOUT_PERIOD,
-      .callback = temperature_readings_callback
-    };
-    
-    // SETUP YOUR HDC REGISTER CONFIGURATION
-    hdc1080_config_t hdc_config = {
-      .humidity_measurement_resolution = HDC1080_HUMIDITY_RESOLUTION_14BIT,
-      .temperature_measurement_resolution = HDC1080_TEMPERATURE_RESOLUTION_14BIT,
-      .mode_of_acquisition = HDC1080_ACQUISITION_HUMIDITY_AND_TEMPERATURE,
-      .heater = HDC1080_HEATER_DISABLED
-    };
-
-    // SETUP AND CONFIGURE THE SENSOR AND ABSTRACTION
-    if(hdc1080_configure(&hdc_settings, hdc_config) == ESP_OK){
-      ESP_LOGI("HDC1080_MAIN", "HDC1080 CONFIGURATION SUCCESSFUL");
-    }
-
-    // AS AN EXAMPLE, ANYTIME READINGS HAVE BEEN REQUESTED AND CONVERSION HAS STARTED
-    // ANYTHING CALLED WILL RETURN IN AN ERROR HDC1080_CONVERTING, A WAIT AND CHECK
-    // FUNCTION WILL BE REQURED BEFORE THE NEXT COMMAND CAN BE RUN
-    // THE WAIT PERIOD CAN BE ADJUSTED IN THE hdc1080.h FILE, HDC1080_CONVERSION_WAIT_PERIOD
-    // THE VALUE IS IN MICROSECONDS. MINIMUM WAIT TIME IS 6.8uS HOWEVER THE DEFAULT IS 1/2 SECOND
-    // SINCE READS SHOULD ONLY OCCUR > ONCE A SECOND FOR STABILITY
-    esp_err_t gcfg = hdc1080_get_configuration(&hdc_config);
-    if(gcfg == HDC1080_CONVERTING){
-      ESP_LOGE("HDC1080_MAIN", "REQUEST FAILED, CONVERSION IN PROGRESS");
-    }
-  }
+  i2c_init();
 }
 
 /* ----------------------------------------------------------------------
