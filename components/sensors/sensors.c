@@ -8,8 +8,9 @@
 #include "esp_log.h"
 #include "esp_err.h"
 #include "esp_temp_sensor.h"
-#include "driver/gpio.h"
-#include "driver/adc.h"
+#include "esp_adc/adc_oneshot.h"
+#include "esp_adc/adc_cali.h"
+#include "esp_adc/adc_cali_scheme.h"
 
 #include "sensors.h"
 #include "hdc1080_main.h"
@@ -17,6 +18,7 @@
 #include "azure-iot.h"
 
 static const char *TAG = "sensors";
+adc_oneshot_unit_handle_t adc1_handle;
 
 esp_err_t sensors_init(void)
 {
@@ -29,34 +31,19 @@ esp_err_t sensors_init(void)
         return ret;
     }
 
-    // Configure GPIO with pull-down for ADC1 channel 1
-    gpio_config_t io_conf = {
-        .pin_bit_mask = (1ULL << 2), // Use appropriate GPIO number for ADC1_CHANNEL_1
-        .mode = GPIO_MODE_INPUT,
-        .pull_up_en = 1,
-        .pull_down_en = 0,
-        .intr_type = GPIO_INTR_DISABLE,
+    //-------------ADC1 Init---------------//
+    adc_oneshot_unit_init_cfg_t init_config1 = {
+        .unit_id = ADC_UNIT_1,
     };
-    ret = gpio_config(&io_conf);
-    if (ret != ESP_OK) {
-        ESP_LOGE(TAG, "Failed to configure GPIO pull-down");
-        return ret;
-    }
-        
-    // Initialize ADC for reading GPIO 1
-    ret = adc1_config_width(ADC_WIDTH_BIT_12);
-    if (ret != ESP_OK) {
-        ESP_LOGE(TAG, "Failed to configure ADC width");
-        return ret;
-    }
-    
-    // Configure ADC channel
-    ret = adc1_config_channel_atten(ADC1_CHANNEL_1, ADC_ATTEN_DB_11);
-    if (ret != ESP_OK) {
-        ESP_LOGE(TAG, "Failed to configure ADC channel");
-        return ret;
-    }
-    
+    ESP_ERROR_CHECK(adc_oneshot_new_unit(&init_config1, &adc1_handle));
+
+    //-------------ADC1 Config---------------//
+    adc_oneshot_chan_cfg_t config = {
+        .atten = ADC_ATTEN_DB_12,
+        .bitwidth = ADC_BITWIDTH_DEFAULT,
+    };
+    ESP_ERROR_CHECK(adc_oneshot_config_channel(adc1_handle, ADC_CHANNEL_0, &config));
+
     return ESP_OK;
 }
 
@@ -114,10 +101,12 @@ esp_err_t sensors_get_json(char *buffer, size_t buffer_size)
     uint32_t uptime_seconds = (uint32_t)(xTaskGetTickCount() / configTICK_RATE_HZ);
     
     // Read voltage from GPIO 1 (assuming it's connected to ADC1 channel 0)
-    int adc_reading = adc1_get_raw(ADC1_CHANNEL_1);
+    int adc_reading;
+    ESP_ERROR_CHECK(adc_oneshot_read(adc1_handle, ADC_CHANNEL_0, &adc_reading));
+    ESP_LOGI(TAG, "ADC%d Channel[%d] Raw Data: %d", ADC_UNIT_1 + 1, ADC_CHANNEL_0, adc_reading);
     // Convert ADC reading to voltage (assuming 3.3V reference and 12-bit ADC)
     float voltage = (adc_reading * 3.3) / 4095.0;
-    led_set(0,255,0);
+    led_set(0,(int)temperature,(int)voltage*10);
 
     int written = snprintf(buffer, buffer_size, 
                           "{\"esp_temperature\":%.1f,\"uptime_seconds\":%u,\"battery_voltage\":%.2f}", 
