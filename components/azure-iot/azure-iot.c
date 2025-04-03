@@ -9,6 +9,12 @@
 #include "FreeRTOS.h"
 #include "task.h"
 
+#define DEEP_SLEEP_TIME 1500
+
+#ifdef DEEP_SLEEP_TIME
+#include "esp_sleep.h"
+#endif                
+
 /* Demo Specific configs. */
 #include "demo_config.h"
 
@@ -398,7 +404,7 @@ static void prvAzureDemoTask( void * pvParameters )
 {
     int lPublishCount = 0;
     uint32_t ulScratchBufferLength = 0U;
-    const int lMaxPublishCount = 5;
+    const int lMaxPublishCount = 2;
     NetworkCredentials_t xNetworkCredentials = { 0 };
     AzureIoTTransportInterface_t xTransport;
     NetworkContext_t xNetworkContext = { 0 };
@@ -602,6 +608,11 @@ static void prvAzureDemoTask( void * pvParameters )
                 LogInfo( ( "This thread has %u bytes free stack\n", uxTaskGetStackHighWaterMark(NULL) ) );
                 LogInfo( ( "Keeping Connection Idle...\r\n\r\n" ) );
                 vTaskDelay( sampleazureiotDELAY_BETWEEN_PUBLISHES_TICKS );
+
+#ifndef DEEP_SLEEP_TIME
+                // If we are not sleeping, this would be a forever loop.
+                lPublishCount--;
+#endif                
             }
 
             if( xAzureSample_IsConnectedToInternet() )
@@ -630,6 +641,16 @@ static void prvAzureDemoTask( void * pvParameters )
              * bombard the IoT Hub. */
             LogInfo( ( "Demo completed successfully.\r\n" ) );
         }
+
+#ifdef DEEP_SLEEP_TIME
+            // If we are sleeping, go to sleep
+            LogInfo( ( "Setting up deep sleep for %ds\n", DEEP_SLEEP_TIME ) );
+
+            esp_sleep_enable_timer_wakeup(DEEP_SLEEP_TIME * 1000000);
+
+            // enter deep sleep
+            esp_deep_sleep_start();
+#endif                
 
         LogInfo( ( "Short delay before starting the next iteration.... \r\n\r\n" ) );
         vTaskDelay( sampleazureiotDELAY_BETWEEN_DEMO_ITERATIONS_TICKS );

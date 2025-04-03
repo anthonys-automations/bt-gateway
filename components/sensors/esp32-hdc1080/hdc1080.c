@@ -10,6 +10,7 @@
  */
 #include <string.h>
 #include <esp_timer.h>
+#include "freertos/FreeRTOS.h"
 #include <driver/i2c.h>
 #include "hdc1080.h"
 
@@ -66,8 +67,11 @@ esp_err_t hdc1080_request_readings(void){
   if(err_ck != ESP_OK){ return err_ck; }
   awaiting_conversion = true;
   /* START CONVERSION WAIT TIMER */
-  err_ck = esp_timer_start_once(hdc1080_conversion_timer_h, HDC1080_CONVERSION_WAIT_PERIOD);
-  return err_ck;
+  // err_ck = esp_timer_start_once(hdc1080_conversion_timer_h, HDC1080_CONVERSION_WAIT_PERIOD);
+  // return err_ck;
+  vTaskDelay( pdMS_TO_TICKS( HDC1080_CONVERSION_WAIT_PERIOD / 1000 ) );
+  hdc1080_conversion_completed((void*)NULL);
+  return ESP_OK;
 }
 
 /* --------------------------------------------------------------------------------------------------
@@ -122,8 +126,9 @@ esp_err_t hdc1080_configure(hdc1080_settings_t * hdc1080_settings, hdc1080_confi
     .name = "hdc1080_conversion_timer"
   };
   /* CREATE THE TEMPERATURE TRIGGER TIMER */
-  err_ck = esp_timer_create(&hdc1080_conversion_timer_args, &hdc1080_conversion_timer_h);
-  return err_ck;
+  // err_ck = esp_timer_create(&hdc1080_conversion_timer_args, &hdc1080_conversion_timer_h);
+  // return err_ck;
+  return ESP_OK;
 }
 
 /* ----------------------------------------------------------------------

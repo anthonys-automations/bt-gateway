@@ -62,6 +62,8 @@ static void sensors_loop( void * pvParameters )
 
     for( ; ; )
     {
+        led_set(0,10,0);
+
         hdc1080_main_request_readings();
 
         err = sensors_get_json((char *)TelemetryBuffer, sizeof(TelemetryBuffer));
@@ -77,6 +79,7 @@ static void sensors_loop( void * pvParameters )
         
         // Queue the telemetry data
         azure_iot_queue_telemetry(TelemetryBuffer, TelemetryBufferLength);
+        led_set(0,0,0);
 
         ESP_LOGI(TAG, "This thread has %u bytes free stack\n", uxTaskGetStackHighWaterMark(NULL));
         ESP_LOGI(TAG, "Minimum free heap size: %"PRIu32" bytes\n", esp_get_minimum_free_heap_size());
@@ -106,7 +109,6 @@ esp_err_t sensors_get_json(char *buffer, size_t buffer_size)
     ESP_LOGI(TAG, "ADC%d Channel[%d] Raw Data: %d", ADC_UNIT_1 + 1, ADC_CHANNEL_0, adc_reading);
     // Convert ADC reading to voltage (assuming 3.3V reference and 12-bit ADC)
     float voltage = (adc_reading * 3.3) / 4095.0;
-    led_set(0,(int)temperature,(int)voltage*10);
 
     int written = snprintf(buffer, buffer_size, 
                           "{\"esp_temperature\":%.1f,\"uptime_seconds\":%u,\"battery_voltage\":%.2f}", 
