@@ -34,6 +34,8 @@ static void print_adv_fields(const struct ble_hs_adv_fields *fields, const char 
     char name[BLE_HS_ADV_MAX_SZ];
     uint8_t i;
 
+    ESP_LOGI(TAG, "--------------------------------------");
+
     // Print device address
     ESP_LOGI(TAG, "Device Address: %s", addr_str);
     // Print RSSI
@@ -95,6 +97,30 @@ static void print_adv_fields(const struct ble_hs_adv_fields *fields, const char 
         ESP_LOGI(TAG, "Manufacturer Specific Data (%d bytes):", fields->mfg_data_len);
         ESP_LOG_BUFFER_HEX(TAG, fields->mfg_data, fields->mfg_data_len);
     }
+
+    ESP_LOGI(TAG, "--------------------------------------");
+}
+
+/* Print advertisement data */
+static void process_ble_adv(const struct ble_hs_adv_fields *fields, const char *addr_str, int8_t rssi)
+{
+    // Print device address and RSSI
+    ESP_LOGI(TAG, "Device Address: %s, RSSI: %d", addr_str, rssi);
+
+    // Manufacturer data 0xEF71
+    if (fields->mfg_data_len >= 14 && 
+        fields->mfg_data[0] == 0x71 && fields->mfg_data[1] == 0xEF) {
+        print_adv_fields(fields, addr_str, rssi);
+
+        float battery_voltage = 0.03125 * fields->mfg_data[2];
+        float chip_temperature = 0.01 * ( (fields->mfg_data[4] << 8) | fields->mfg_data[3]);
+        float temperature = ((fields->mfg_data[6] << 8) | fields->mfg_data[5]) * 165 / 65536 - 40;
+        float humidity = ((fields->mfg_data[8] << 8) | fields->mfg_data[7]) * 100 / 65536;
+        unsigned long uptime = ( (fields->mfg_data[15] << 24) | (fields->mfg_data[14] << 16) | (fields->mfg_data[13] << 8) | fields->mfg_data[12]);
+
+        ESP_LOGI(TAG, "voltage: %f, chip temperature: %f, temperature: %f, humidity: %f, uptime: %lu", battery_voltage, chip_temperature, temperature, humidity, uptime);
+
+    }
 }
 
 /**
@@ -153,8 +179,7 @@ static int ble_gap_event(struct ble_gap_event *event, void *arg)
         }
 
         /* An advertisement report was received during GAP discovery. */
-        print_adv_fields(&fields, addr_to_str(&event->disc.addr), event->disc.rssi);
-        ESP_LOGI(TAG, "--------------------------------------");
+        process_ble_adv(&fields, addr_to_str(&event->disc.addr), event->disc.rssi);
         return 0;
 
     case BLE_GAP_EVENT_DISC_COMPLETE:
