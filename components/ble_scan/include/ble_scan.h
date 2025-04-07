@@ -1,0 +1,1 @@
+void ble_scan_init(void);
