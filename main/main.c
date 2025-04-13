@@ -1,15 +1,15 @@
 /* Copyright (c) Microsoft Corporation. All rights reserved. */
 /* SPDX-License-Identifier: MIT */
 
-// #include "azure-iot.h"
-// #include "azure_sample_connection.h"
-// #include "sensors.h"
+#include "azure-iot.h"
+#include "azure_sample_connection.h"
+#include "sensors.h"
 #include "ble_scan.h"
 
 void app_main(void)
 {
     ble_scan_init();
-    // connectivity_init();
-    // vStartSensorsLoop();
-    // vStartAzureIoT();
+    connectivity_init();
+    vStartSensorsLoop();
+    vStartAzureIoT();
 }

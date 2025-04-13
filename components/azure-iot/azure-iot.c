@@ -9,7 +9,7 @@
 #include "FreeRTOS.h"
 #include "task.h"
 
-#define DEEP_SLEEP_TIME 1500
+// #define DEEP_SLEEP_TIME 1500
 
 #ifdef DEEP_SLEEP_TIME
 #include "esp_sleep.h"

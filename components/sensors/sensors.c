@@ -64,7 +64,7 @@ static void sensors_loop( void * pvParameters )
     {
         led_set(0,10,0);
 
-        hdc1080_main_request_readings();
+        // hdc1080_main_request_readings();
 
         err = sensors_get_json((char *)TelemetryBuffer, sizeof(TelemetryBuffer));
         if (err != ESP_OK) {

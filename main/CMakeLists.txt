@@ -8,5 +8,5 @@ set(COMPONENT_INCLUDE_DIRS
 
 idf_component_register(SRCS "main.c"
                     INCLUDE_DIRS ${COMPONENT_INCLUDE_DIRS}
-                    REQUIRES ble_scan)
+                    REQUIRES ble_scan sensors azure-iot)
 

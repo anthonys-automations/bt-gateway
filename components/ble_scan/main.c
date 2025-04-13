@@ -7,6 +7,7 @@
 #include "host/util/util.h"
 #include "services/gap/ble_svc_gap.h"
 #include "esp_timer.h"
+#include "azure-iot.h"
 
 static const char *TAG = "BLE_SCANNER";
 static int ble_gap_event(struct ble_gap_event *event, void *arg);
@@ -120,6 +121,31 @@ static void process_ble_adv(const struct ble_hs_adv_fields *fields, const char *
 
         ESP_LOGI(TAG, "voltage: %f, chip temperature: %f, temperature: %f, humidity: %f, uptime: %lu", battery_voltage, chip_temperature, temperature, humidity, uptime);
 
+        // Variable declarations
+        uint8_t TelemetryBuffer[AZURE_IOT_TELEMETRY_MAXLEN];
+        size_t TelemetryBufferLength = 0;
+        BaseType_t queueResult;
+
+        // Create JSON with all required variables
+        TelemetryBufferLength = snprintf((char *)TelemetryBuffer, sizeof(TelemetryBuffer),
+                            "{\"battery_voltage\":%.2f,\"chip_temperature\":%.2f,\"temperature\":%.2f,\"humidity\":%.2f,\"uptime\":%lu}",
+                            battery_voltage, chip_temperature, temperature, humidity, uptime);
+
+        // Check for snprintf buffer overflow
+        if (TelemetryBufferLength >= sizeof(TelemetryBuffer)) {
+            ESP_LOGW(TAG, "JSON message truncated, original length: %d", TelemetryBufferLength);
+            TelemetryBufferLength = sizeof(TelemetryBuffer) - 1;
+        }
+
+        ESP_LOGI(TAG, "Sensor data prepared: %s", TelemetryBuffer);
+
+        // Queue the telemetry data with addr_str as source identifier
+        queueResult = azure_iot_queue_telemetry(TelemetryBuffer, TelemetryBufferLength, addr_str);
+        if (queueResult != pdPASS) {
+            ESP_LOGE(TAG, "Failed to queue telemetry data");
+        } else {
+            ESP_LOGI(TAG, "Successfully queued telemetry data from device: %s", addr_str);
+        }
     }
 }
 
