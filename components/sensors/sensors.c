@@ -78,7 +78,7 @@ static void sensors_loop( void * pvParameters )
         }
         
         // Queue the telemetry data
-        azure_iot_queue_telemetry(TelemetryBuffer, TelemetryBufferLength);
+        azure_iot_queue_telemetry(TelemetryBuffer, TelemetryBufferLength, NULL);
         led_set(0,0,0);
 
         ESP_LOGI(TAG, "This thread has %u bytes free stack\n", uxTaskGetStackHighWaterMark(NULL));

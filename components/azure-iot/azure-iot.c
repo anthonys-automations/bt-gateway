@@ -45,6 +45,7 @@
 typedef struct {
     uint8_t data[ AZURE_IOT_TELEMETRY_MAXLEN ]; // Fixed buffer size
     size_t length;     // Actual data length
+    char source[32];   // Source identifier
 } TelemetryMessage_t;
 
 /**
@@ -73,9 +74,10 @@ QueueHandle_t azure_iot_get_telemetry_queue(void)
  * @brief Adds a message to the telemetry queue
  * @param pucMessage Pointer to the message buffer
  * @param xMessageLength Length of the message
+ * @param pcSource Optional source identifier (will use democonfigDEVICE_ID if NULL)
  * @return BaseType_t pdPASS on success, pdFAIL on failure
  */
-BaseType_t azure_iot_queue_telemetry(uint8_t *pucMessage, size_t xMessageLength)
+BaseType_t azure_iot_queue_telemetry(uint8_t *pucMessage, size_t xMessageLength, const char *pcSource)
 {
     // Get queue handle (creates if needed)
     QueueHandle_t xQueue = azure_iot_get_telemetry_queue();
@@ -100,12 +102,24 @@ BaseType_t azure_iot_queue_telemetry(uint8_t *pucMessage, size_t xMessageLength)
     memcpy(message.data, pucMessage, xMessageLength);
     message.length = xMessageLength;
     
+    // Set source identifier (use default if NULL)
+    if (pcSource != NULL) {
+        // Copy with explicit null termination
+        size_t source_len = strnlen(pcSource, sizeof(message.source) - 1);
+        memcpy(message.source, pcSource, source_len);
+        message.source[source_len] = '\0'; // Properly terminate at the end of the actual string
+    } else {
+        size_t source_len = strnlen(pcSource, sizeof(message.source) - 1);
+        strncpy(message.source, democonfigDEVICE_ID, source_len);
+        message.source[source_len] = '\0'; // Ensure null-termination
+    }
+    
     // Put message into queue
     BaseType_t xStatus = xQueueSendToBack(xQueue, &message, pdMS_TO_TICKS(1000)); // Increased timeout
     if (xStatus != pdPASS) {
         LogError(("Failed to send message to queue - queue might be full"));
     } else {
-        LogInfo(("Message added to telemetry queue, length: %d", xMessageLength));
+        LogInfo(("Message added to telemetry queue, length: %d, source: %s", xMessageLength, message.source));
     }
 
     return xStatus;
@@ -538,27 +552,6 @@ static void prvAzureDemoTask( void * pvParameters )
             }
             configASSERT(xResult == eAzureIoTSuccess);
 
-            /* Create a bag of properties for the telemetry */
-            xResult = AzureIoTMessage_PropertiesInit( &xPropertyBag, ucPropertyBuffer, 0, sizeof( ucPropertyBuffer ) );
-            configASSERT( xResult == eAzureIoTSuccess );
-
-            /* Sending a default property (Content-Type). */
-            xResult = AzureIoTMessage_PropertiesAppend( &xPropertyBag,
-                                                        ( uint8_t * ) AZ_IOT_MESSAGE_PROPERTIES_CONTENT_TYPE, sizeof( AZ_IOT_MESSAGE_PROPERTIES_CONTENT_TYPE ) - 1,
-                                                        ( uint8_t * ) sampleazureiotMESSAGE_CONTENT_TYPE, sizeof( sampleazureiotMESSAGE_CONTENT_TYPE ) - 1 );
-            configASSERT( xResult == eAzureIoTSuccess );
-
-            /* Sending a default property (Content-Encoding). */
-            xResult = AzureIoTMessage_PropertiesAppend( &xPropertyBag,
-                                                        ( uint8_t * ) AZ_IOT_MESSAGE_PROPERTIES_CONTENT_ENCODING, sizeof( AZ_IOT_MESSAGE_PROPERTIES_CONTENT_ENCODING ) - 1,
-                                                        ( uint8_t * ) sampleazureiotMESSAGE_CONTENT_ENCODING, sizeof( sampleazureiotMESSAGE_CONTENT_ENCODING ) - 1 );
-            configASSERT( xResult == eAzureIoTSuccess );
-
-            /* How to send an user-defined custom property. */
-            xResult = AzureIoTMessage_PropertiesAppend( &xPropertyBag, ( uint8_t * ) "source", sizeof( "source" ) - 1,
-                                                        ( uint8_t * ) "sample-test-name", sizeof( "sample-test-name" ) - 1 );
-            configASSERT( xResult == eAzureIoTSuccess );
-
             /* Publish messages with QoS1, send and process Keep alive messages. */
             for( lPublishCount = 0;
                  lPublishCount < lMaxPublishCount && xAzureSample_IsConnectedToInternet();
@@ -571,12 +564,38 @@ static void prvAzureDemoTask( void * pvParameters )
                     for (int i = 0;
                          i < 10 && xQueueReceive(xQueue, &receivedMessage, pdMS_TO_TICKS(1000)) == pdTRUE;
                          i++) {
-                        LogInfo(("Retrieved message from queue, length: %d, sending to Azure IoT Hub", 
-                                receivedMessage.length));
+                        LogInfo(("Retrieved message from queue, length: %d, source: %s, sending to Azure IoT Hub", 
+                                receivedMessage.length, receivedMessage.source));
                         
                         // Copy data to scratch buffer if needed, or use directly
                         memcpy(ucScratchBuffer, receivedMessage.data, receivedMessage.length);
                         ulScratchBufferLength = receivedMessage.length;
+                        
+                        // Create a bag of properties for the telemetry (or reset if already exists)
+                        xResult = AzureIoTMessage_PropertiesInit(&xPropertyBag, ucPropertyBuffer, 0, sizeof(ucPropertyBuffer));
+                        configASSERT(xResult == eAzureIoTSuccess);
+
+                        // Add standard properties
+                        xResult = AzureIoTMessage_PropertiesAppend(&xPropertyBag,
+                                                                  (uint8_t *)AZ_IOT_MESSAGE_PROPERTIES_CONTENT_TYPE, 
+                                                                  sizeof(AZ_IOT_MESSAGE_PROPERTIES_CONTENT_TYPE) - 1,
+                                                                  (uint8_t *)sampleazureiotMESSAGE_CONTENT_TYPE, 
+                                                                  sizeof(sampleazureiotMESSAGE_CONTENT_TYPE) - 1);
+                        configASSERT(xResult == eAzureIoTSuccess);
+
+                        xResult = AzureIoTMessage_PropertiesAppend(&xPropertyBag,
+                                                                  (uint8_t *)AZ_IOT_MESSAGE_PROPERTIES_CONTENT_ENCODING, 
+                                                                  sizeof(AZ_IOT_MESSAGE_PROPERTIES_CONTENT_ENCODING) - 1,
+                                                                  (uint8_t *)sampleazureiotMESSAGE_CONTENT_ENCODING, 
+                                                                  sizeof(sampleazureiotMESSAGE_CONTENT_ENCODING) - 1);
+                        configASSERT(xResult == eAzureIoTSuccess);
+
+                        // Add source property from the message
+                        xResult = AzureIoTMessage_PropertiesAppend(&xPropertyBag, 
+                                                                  (uint8_t *)"source", sizeof("source") - 1,
+                                                                  (uint8_t *)receivedMessage.source, 
+                                                                  strlen(receivedMessage.source));
+                        configASSERT(xResult == eAzureIoTSuccess);
                         
                         xResult = AzureIoTHubClient_SendTelemetry(&xAzureIoTHubClient,
                                                                  ucScratchBuffer, ulScratchBufferLength,

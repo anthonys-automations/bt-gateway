@@ -45,7 +45,7 @@ void temperature_readings_callback(hdc1080_sensor_readings_t sens_readings){
   ESP_LOGI("HDC1080_SENSOR_DATA", "Sensor data prepared: %s", TelemetryBuffer);
 
   // Queue the telemetry data
-  azure_iot_queue_telemetry(TelemetryBuffer, strlen((char *)TelemetryBuffer));
+  azure_iot_queue_telemetry(TelemetryBuffer, strlen((char *)TelemetryBuffer), NULL);
 
 }
 

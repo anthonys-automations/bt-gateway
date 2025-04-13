@@ -373,3 +373,4 @@ dependencies.lock
 # VSCode settings
 **/settings.json
 **/c_cpp_properties.json
+.vscode/bookmarks.json
