@@ -109,9 +109,10 @@ BaseType_t azure_iot_queue_telemetry(uint8_t *pucMessage, size_t xMessageLength,
         memcpy(message.source, pcSource, source_len);
         message.source[source_len] = '\0'; // Properly terminate at the end of the actual string
     } else {
-        size_t source_len = strnlen(pcSource, sizeof(message.source) - 1);
-        strncpy(message.source, democonfigDEVICE_ID, source_len);
-        message.source[source_len] = '\0'; // Ensure null-termination
+        // Use democonfigDEVICE_ID instead when pcSource is NULL
+        size_t device_id_len = strlen(democonfigDEVICE_ID);
+        memcpy(message.source, democonfigDEVICE_ID, device_id_len);
+        message.source[device_id_len] = '\0'; // Ensure null-termination
     }
     
     // Put message into queue

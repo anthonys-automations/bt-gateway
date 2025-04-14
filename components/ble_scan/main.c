@@ -121,31 +121,31 @@ static void process_ble_adv(const struct ble_hs_adv_fields *fields, const char *
 
         ESP_LOGI(TAG, "voltage: %f, chip temperature: %f, temperature: %f, humidity: %f, uptime: %lu", battery_voltage, chip_temperature, temperature, humidity, uptime);
 
-        // Variable declarations
-        uint8_t TelemetryBuffer[AZURE_IOT_TELEMETRY_MAXLEN];
-        size_t TelemetryBufferLength = 0;
-        BaseType_t queueResult;
+        // // Variable declarations
+        // uint8_t TelemetryBuffer[AZURE_IOT_TELEMETRY_MAXLEN];
+        // size_t TelemetryBufferLength = 0;
+        // BaseType_t queueResult;
 
-        // Create JSON with all required variables
-        TelemetryBufferLength = snprintf((char *)TelemetryBuffer, sizeof(TelemetryBuffer),
-                            "{\"battery_voltage\":%.2f,\"chip_temperature\":%.2f,\"temperature\":%.2f,\"humidity\":%.2f,\"uptime\":%lu}",
-                            battery_voltage, chip_temperature, temperature, humidity, uptime);
+        // // Create JSON with all required variables
+        // TelemetryBufferLength = snprintf((char *)TelemetryBuffer, sizeof(TelemetryBuffer),
+        //                     "{\"battery_voltage\":%.2f,\"chip_temperature\":%.2f,\"temperature\":%.2f,\"humidity\":%.2f,\"uptime\":%lu}",
+        //                     battery_voltage, chip_temperature, temperature, humidity, uptime);
 
-        // Check for snprintf buffer overflow
-        if (TelemetryBufferLength >= sizeof(TelemetryBuffer)) {
-            ESP_LOGW(TAG, "JSON message truncated, original length: %d", TelemetryBufferLength);
-            TelemetryBufferLength = sizeof(TelemetryBuffer) - 1;
-        }
+        // // Check for snprintf buffer overflow
+        // if (TelemetryBufferLength >= sizeof(TelemetryBuffer)) {
+        //     ESP_LOGW(TAG, "JSON message truncated, original length: %d", TelemetryBufferLength);
+        //     TelemetryBufferLength = sizeof(TelemetryBuffer) - 1;
+        // }
 
-        ESP_LOGI(TAG, "Sensor data prepared: %s", TelemetryBuffer);
+        // ESP_LOGI(TAG, "Sensor data prepared: %s", TelemetryBuffer);
 
-        // Queue the telemetry data with addr_str as source identifier
-        queueResult = azure_iot_queue_telemetry(TelemetryBuffer, TelemetryBufferLength, addr_str);
-        if (queueResult != pdPASS) {
-            ESP_LOGE(TAG, "Failed to queue telemetry data");
-        } else {
-            ESP_LOGI(TAG, "Successfully queued telemetry data from device: %s", addr_str);
-        }
+        // // Queue the telemetry data with addr_str as source identifier
+        // queueResult = azure_iot_queue_telemetry(TelemetryBuffer, TelemetryBufferLength, addr_str);
+        // if (queueResult != pdPASS) {
+        //     ESP_LOGE(TAG, "Failed to queue telemetry data");
+        // } else {
+        //     ESP_LOGI(TAG, "Successfully queued telemetry data from device: %s", addr_str);
+        // }
     }
 }
 
