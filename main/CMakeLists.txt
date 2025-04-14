@@ -3,7 +3,6 @@
 
 set(COMPONENT_INCLUDE_DIRS
     .
-    ../config
 )
 
 idf_component_register(SRCS "main.c"

@@ -30,7 +30,7 @@ list(APPEND COMPONENT_SOURCES
 )
 
 set(COMPONENT_INCLUDE_DIRS
-    ${CMAKE_CURRENT_LIST_DIR}/../../config
+    ${CMAKE_CURRENT_LIST_DIR}/config
     ${CMAKE_CURRENT_LIST_DIR}
     ${MBEDTLS_DIR}/mbedtls/include
     include

@@ -83,7 +83,7 @@ static void sensors_loop( void * pvParameters )
 
         ESP_LOGI(TAG, "This thread has %u bytes free stack\n", uxTaskGetStackHighWaterMark(NULL));
         ESP_LOGI(TAG, "Minimum free heap size: %"PRIu32" bytes\n", esp_get_minimum_free_heap_size());
-        vTaskDelay( pdMS_TO_TICKS( 32000U ) );
+        vTaskDelay( pdMS_TO_TICKS( 32*60*1000U ) );
     }
 }
 
@@ -111,8 +111,8 @@ esp_err_t sensors_get_json(char *buffer, size_t buffer_size)
     float voltage = (adc_reading * 3.3) / 4095.0;
 
     int written = snprintf(buffer, buffer_size, 
-                          "{\"esp_temperature\":%.1f,\"uptime_seconds\":%u,\"battery_voltage\":%.2f}", 
-                          temperature, (unsigned int)uptime_seconds, voltage);
+                          "{\"esp_temperature\":%.1f,\"uptime_seconds\":%u,\"battery_voltage\":%.2f,\"min_free_heap\":%"PRIu32"}", 
+                          temperature, (unsigned int)uptime_seconds, voltage, esp_get_minimum_free_heap_size());
     
     if (written < 0 || written >= buffer_size) {
         return ESP_ERR_NOT_ALLOWED;
