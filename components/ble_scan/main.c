@@ -8,13 +8,30 @@
 #include "services/gap/ble_svc_gap.h"
 #include "esp_timer.h"
 #include "azure-iot.h"
+#include "freertos/queue.h"
 
 static const char *TAG = "BLE_SCANNER";
 static int ble_gap_event(struct ble_gap_event *event, void *arg);
 static void ble_scan(void);
+static void process_ble_data_task(void *param);
 
 // 10 seconds in milliseconds
 #define SCAN_DURATION_MS 10000
+#define BLE_ADV_QUEUE_SIZE 10
+#define BLE_ADV_MAX_DATA_LEN 64
+#define PROCESS_TASK_STACK_SIZE 8192
+#define PROCESS_TASK_PRIORITY tskIDLE_PRIORITY
+
+// Define a struct for BLE advertisement data queue items
+typedef struct {
+    uint8_t raw_data[BLE_ADV_MAX_DATA_LEN];
+    uint8_t data_len;
+    char addr_str[18]; // XX:XX:XX:XX:XX:XX\0
+    int8_t rssi;
+} ble_adv_data_t;
+
+// Queue handle for BLE advertisement data
+static QueueHandle_t ble_adv_queue = NULL;
 
 /* Convert BLE address to string */
 static char *addr_to_str(const ble_addr_t *addr)
@@ -102,51 +119,84 @@ static void print_adv_fields(const struct ble_hs_adv_fields *fields, const char 
     ESP_LOGI(TAG, "--------------------------------------");
 }
 
-/* Print advertisement data */
-static void process_ble_adv(const struct ble_hs_adv_fields *fields, const char *addr_str, int8_t rssi)
+/* Process advertisement data */
+static void process_ble_adv(const uint8_t *data, uint8_t data_len, const char *addr_str, int8_t rssi)
 {
+    struct ble_hs_adv_fields fields;
+    int rc;
+    
+    // Parse advertisement fields from raw data
+    rc = ble_hs_adv_parse_fields(&fields, data, data_len);
+    if (rc != 0) {
+        ESP_LOGE(TAG, "Error parsing advertisement fields: %d", rc);
+        return;
+    }
+    
     // Print device address and RSSI
     ESP_LOGI(TAG, "Device Address: %s, RSSI: %d", addr_str, rssi);
 
     // Manufacturer data 0xEF71
-    if (fields->mfg_data_len >= 14 && 
-        fields->mfg_data[0] == 0x71 && fields->mfg_data[1] == 0xEF) {
-        print_adv_fields(fields, addr_str, rssi);
+    if (fields.mfg_data_len >= 14 && 
+        fields.mfg_data[0] == 0x71 && fields.mfg_data[1] == 0xEF) {
+        print_adv_fields(&fields, addr_str, rssi);
 
-        float battery_voltage = 0.03125 * fields->mfg_data[2];
-        float chip_temperature = 0.01 * ( (fields->mfg_data[4] << 8) | fields->mfg_data[3]);
-        float temperature = ((fields->mfg_data[6] << 8) | fields->mfg_data[5]) * 165 / 65536 - 40;
-        float humidity = ((fields->mfg_data[8] << 8) | fields->mfg_data[7]) * 100 / 65536;
-        unsigned long uptime = ( (fields->mfg_data[15] << 24) | (fields->mfg_data[14] << 16) | (fields->mfg_data[13] << 8) | fields->mfg_data[12]);
+        float battery_voltage = 0.03125 * fields.mfg_data[2];
+        float chip_temperature = 0.01 * ( (fields.mfg_data[4] << 8) | fields.mfg_data[3]);
+        float temperature = ((fields.mfg_data[6] << 8) | fields.mfg_data[5]) * 165 / 65536 - 40;
+        float humidity = ((fields.mfg_data[8] << 8) | fields.mfg_data[7]) * 100 / 65536;
+        unsigned long uptime = ( (fields.mfg_data[15] << 24) | (fields.mfg_data[14] << 16) | (fields.mfg_data[13] << 8) | fields.mfg_data[12]);
 
         ESP_LOGI(TAG, "voltage: %f, chip temperature: %f, temperature: %f, humidity: %f, uptime: %lu", battery_voltage, chip_temperature, temperature, humidity, uptime);
 
-        // // Variable declarations
-        // uint8_t TelemetryBuffer[AZURE_IOT_TELEMETRY_MAXLEN];
-        // size_t TelemetryBufferLength = 0;
-        // BaseType_t queueResult;
+        // Variable declarations
+        uint8_t TelemetryBuffer[AZURE_IOT_TELEMETRY_MAXLEN];
+        size_t TelemetryBufferLength = 0;
+        BaseType_t queueResult;
 
-        // // Create JSON with all required variables
-        // TelemetryBufferLength = snprintf((char *)TelemetryBuffer, sizeof(TelemetryBuffer),
-        //                     "{\"battery_voltage\":%.2f,\"chip_temperature\":%.2f,\"temperature\":%.2f,\"humidity\":%.2f,\"uptime\":%lu}",
-        //                     battery_voltage, chip_temperature, temperature, humidity, uptime);
+        // Create JSON with all required variables
+        TelemetryBufferLength = snprintf((char *)TelemetryBuffer, sizeof(TelemetryBuffer),
+                            "{\"battery_voltage\":%.2f,\"chip_temperature\":%.2f,\"temperature\":%.2f,\"humidity\":%.2f,\"uptime\":%lu}",
+                            battery_voltage, chip_temperature, temperature, humidity, uptime);
 
-        // // Check for snprintf buffer overflow
-        // if (TelemetryBufferLength >= sizeof(TelemetryBuffer)) {
-        //     ESP_LOGW(TAG, "JSON message truncated, original length: %d", TelemetryBufferLength);
-        //     TelemetryBufferLength = sizeof(TelemetryBuffer) - 1;
-        // }
+        // Check for snprintf buffer overflow
+        if (TelemetryBufferLength >= sizeof(TelemetryBuffer)) {
+            ESP_LOGW(TAG, "JSON message truncated, original length: %d", TelemetryBufferLength);
+            TelemetryBufferLength = sizeof(TelemetryBuffer) - 1;
+        }
 
-        // ESP_LOGI(TAG, "Sensor data prepared: %s", TelemetryBuffer);
+        ESP_LOGI(TAG, "Sensor data prepared: %s", TelemetryBuffer);
 
-        // // Queue the telemetry data with addr_str as source identifier
-        // queueResult = azure_iot_queue_telemetry(TelemetryBuffer, TelemetryBufferLength, addr_str);
-        // if (queueResult != pdPASS) {
-        //     ESP_LOGE(TAG, "Failed to queue telemetry data");
-        // } else {
-        //     ESP_LOGI(TAG, "Successfully queued telemetry data from device: %s", addr_str);
-        // }
+        // Queue the telemetry data with addr_str as source identifier
+        queueResult = azure_iot_queue_telemetry(TelemetryBuffer, TelemetryBufferLength, addr_str);
+        if (queueResult != pdPASS) {
+            ESP_LOGE(TAG, "Failed to queue telemetry data");
+        } else {
+            ESP_LOGI(TAG, "Successfully queued telemetry data from device: %s", addr_str);
+        }
     }
+}
+
+/**
+ * Task to process BLE advertisement data from the queue
+ */
+static void process_ble_data_task(void *param)
+{
+    ble_adv_data_t adv_data;
+    
+    ESP_LOGI(TAG, "BLE Advertisement Processing Task Started");
+    
+    while (1) {
+        // Wait for advertisement data from the queue
+        if (xQueueReceive(ble_adv_queue, &adv_data, portMAX_DELAY) == pdTRUE) {
+            // Process the advertisement data
+            process_ble_adv(adv_data.raw_data, adv_data.data_len, adv_data.addr_str, adv_data.rssi);
+            ESP_LOGI(TAG, "This thread has %u bytes free stack\n", uxTaskGetStackHighWaterMark(NULL));
+            ESP_LOGI(TAG, "Minimum free heap size: %"PRIu32" bytes\n", esp_get_minimum_free_heap_size());
+        }
+    }
+    
+    // This should never be reached
+    vTaskDelete(NULL);
 }
 
 /**
@@ -193,19 +243,36 @@ static void ble_scan(void)
  */
 static int ble_gap_event(struct ble_gap_event *event, void *arg)
 {
-    struct ble_hs_adv_fields fields;
-    int rc;
+    ble_adv_data_t adv_data;
+    BaseType_t xHigherPriorityTaskWoken = pdFALSE;
 
     switch (event->type) {
     case BLE_GAP_EVENT_DISC:
-        rc = ble_hs_adv_parse_fields(&fields, event->disc.data,
-                                     event->disc.length_data);
-        if (rc != 0) {
-            return 0;
+        if (event->disc.length_data > BLE_ADV_MAX_DATA_LEN) {
+            ESP_LOGW(TAG, "Advertisement data too large (%d bytes), truncating to %d bytes", 
+                    event->disc.length_data, BLE_ADV_MAX_DATA_LEN);
+            adv_data.data_len = BLE_ADV_MAX_DATA_LEN;
+        } else {
+            adv_data.data_len = event->disc.length_data;
         }
-
-        /* An advertisement report was received during GAP discovery. */
-        process_ble_adv(&fields, addr_to_str(&event->disc.addr), event->disc.rssi);
+        
+        // Copy raw advertisement data
+        memcpy(adv_data.raw_data, event->disc.data, adv_data.data_len);
+        
+        // Copy device address
+        strncpy(adv_data.addr_str, addr_to_str(&event->disc.addr), sizeof(adv_data.addr_str) - 1);
+        adv_data.addr_str[sizeof(adv_data.addr_str) - 1] = '\0'; // Ensure null termination
+        
+        // Copy RSSI
+        adv_data.rssi = event->disc.rssi;
+        
+        // Send data to queue for processing
+        if (xQueueSendFromISR(ble_adv_queue, &adv_data, &xHigherPriorityTaskWoken) != pdPASS) {
+            ESP_LOGW(TAG, "Failed to queue advertisement data, queue full");
+        }
+        
+        // Yield to higher priority task if one was woken
+        portYIELD_FROM_ISR(xHigherPriorityTaskWoken);
         return 0;
 
     case BLE_GAP_EVENT_DISC_COMPLETE:
@@ -260,9 +327,33 @@ void ble_scan_init(void)
     }
     ESP_ERROR_CHECK(ret);
 
+    // Create the BLE advertisement data queue
+    ble_adv_queue = xQueueCreate(BLE_ADV_QUEUE_SIZE, sizeof(ble_adv_data_t));
+    if (ble_adv_queue == NULL) {
+        ESP_LOGE(TAG, "Failed to create BLE advertisement queue");
+        return;
+    }
+    
+    // Create the task to process BLE advertisement data
+    BaseType_t task_created = xTaskCreate(
+        process_ble_data_task,        // Task function
+        "ble_proc_task",              // Task name
+        PROCESS_TASK_STACK_SIZE,      // Stack size
+        NULL,                         // Parameters
+        PROCESS_TASK_PRIORITY,        // Priority
+        NULL                          // Task handle
+    );
+    
+    if (task_created != pdPASS) {
+        ESP_LOGE(TAG, "Failed to create BLE processing task");
+        vQueueDelete(ble_adv_queue);
+        return;
+    }
+
     ret = nimble_port_init();
     if (ret != ESP_OK) {
         ESP_LOGE(TAG, "Failed to init nimble %d", ret);
+        vQueueDelete(ble_adv_queue);
         return;
     }
 
@@ -275,6 +366,7 @@ void ble_scan_init(void)
     ret = ble_svc_gap_device_name_set("ble-scanner");
     if (ret != 0) {
         ESP_LOGE(TAG, "Failed to set device name, ret=%d", ret);
+        vQueueDelete(ble_adv_queue);
         return;
     }
 
