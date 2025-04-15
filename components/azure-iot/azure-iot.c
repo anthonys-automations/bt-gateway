@@ -215,7 +215,7 @@ BaseType_t azure_iot_queue_telemetry(uint8_t *pucMessage, size_t xMessageLength,
  * Note that the process loop also has a timeout, so the total time between
  * publishes is the sum of the two delays.
  */
-#define sampleazureiotDELAY_BETWEEN_PUBLISHES_TICKS           ( pdMS_TO_TICKS( 20000U ) )
+#define sampleazureiotDELAY_BETWEEN_PUBLISHES_TICKS           ( pdMS_TO_TICKS( 7000U ) )
 
 /**
  * @brief Transport timeout in milliseconds for transport send and receive.
@@ -611,7 +611,11 @@ static void prvAzureDemoTask( void * pvParameters )
                 LogInfo( ( "Attempt to receive publish message from IoT Hub.\r\n" ) );
                 xResult = AzureIoTHubClient_ProcessLoop( &xAzureIoTHubClient,
                                                          sampleazureiotPROCESS_LOOP_TIMEOUT_MS );
-                configASSERT( xResult == eAzureIoTSuccess );
+                if( xResult != eAzureIoTSuccess )
+                {
+                    LogError( ( "ProcessLoop failed with error %d, breaking out of publish loop to reconnect", xResult ) );
+                    break; // Exit the publishing loop to attempt reconnection
+                }
 
                 if( lPublishCount % 2 == 0 )
                 {
@@ -630,8 +634,8 @@ static void prvAzureDemoTask( void * pvParameters )
                 vTaskDelay( sampleazureiotDELAY_BETWEEN_PUBLISHES_TICKS );
 
 #ifndef DEEP_SLEEP_TIME
-                // If we are not sleeping, this would be a forever loop.
-                lPublishCount--;
+                // // If we are not sleeping, this would be a forever loop.
+                // lPublishCount--;
 #endif                
             }
 

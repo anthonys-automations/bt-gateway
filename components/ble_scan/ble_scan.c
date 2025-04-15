@@ -16,7 +16,7 @@ static void ble_scan(void);
 static void process_ble_data_task(void *param);
 
 // 10 seconds in milliseconds
-#define SCAN_DURATION_MS 10000
+#define SCAN_DURATION_MS 60000
 #define BLE_ADV_QUEUE_SIZE 10
 #define BLE_ADV_MAX_DATA_LEN 64
 #define PROCESS_TASK_STACK_SIZE 8192
@@ -215,7 +215,7 @@ static void ble_scan(void)
         return;
     }
 
-    /* Filter duplicates during the 10-second scan period */
+    /* Filter duplicates during the 60-second scan period */
     disc_params.filter_duplicates = 1;
     /**
      * Perform a passive scan.  I.e., don't send follow-up scan requests to
@@ -229,8 +229,8 @@ static void ble_scan(void)
     disc_params.filter_policy = 0;
     disc_params.limited = 0;
 
-    ESP_LOGI(TAG, "Starting 10-second BLE scan...");
-    /* Set scan duration to 10 seconds */
+    ESP_LOGI(TAG, "Starting 60-second BLE scan...");
+    /* Set scan duration to 60 seconds */
     rc = ble_gap_disc(own_addr_type, SCAN_DURATION_MS, &disc_params,
                       ble_gap_event, NULL);
     if (rc != 0) {
