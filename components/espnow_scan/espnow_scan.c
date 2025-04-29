@@ -14,7 +14,39 @@
 #include "esp_mac.h"
 #include "esp_now.h"
 #include "esp_crc.h"
-#include "espnow_example.h"
+
+
+/* ESPNOW can work in both station and softap mode. It is configured in menuconfig. */
+#define ESPNOW_WIFI_MODE WIFI_MODE_STA
+#define ESPNOW_WIFI_IF   ESP_IF_WIFI_STA
+
+#define ESPNOW_QUEUE_SIZE           6
+
+#define IS_BROADCAST_ADDR(addr) (memcmp(addr, s_broadcast_mac, ESP_NOW_ETH_ALEN) == 0)
+
+/* When ESPNOW receiving callback function is called, post event to ESPNOW task. */
+typedef struct {
+    uint8_t mac_addr[ESP_NOW_ETH_ALEN];
+    signed rssi;
+    uint8_t *data;
+    int data_len;
+} espnow_event_recv_cb_t;
+
+typedef struct {
+    uint16_t version;                     //Sequence number of ESPNOW data.
+    uint32_t crc;                         //CRC16 value of ESPNOW data.
+    uint8_t payload[0];                   //Real payload of ESPNOW data.
+} __attribute__((packed)) espnow_data_t;
+
+typedef struct {
+    uint16_t version;                     //Sequence number of ESPNOW data.
+    uint32_t crc;                         //CRC16 value of ESPNOW data.
+    uint32_t bootCount;
+    float voltage;
+    int weight;
+} __attribute__((packed)) espnow_data_7601_t;
+
+
 
 #define ESPNOW_MAXDELAY 512
 
@@ -46,38 +78,26 @@ static void example_wifi_init(void)
  * necessary data to a queue and handle it from a lower priority task. */
 static void example_espnow_recv_cb(const esp_now_recv_info_t *recv_info, const uint8_t *data, int len)
 {
-    example_espnow_event_t evt;
-    example_espnow_event_recv_cb_t *recv_cb = &evt.info.recv_cb;
+    espnow_event_recv_cb_t recv_cb;
     uint8_t * mac_addr = recv_info->src_addr;
-    uint8_t * des_addr = recv_info->des_addr;
 
     if (mac_addr == NULL || data == NULL || len <= 0) {
         ESP_LOGE(TAG, "Receive cb arg error");
         return;
     }
 
-    if (IS_BROADCAST_ADDR(des_addr)) {
-        /* If added a peer with encryption before, the receive packets may be
-         * encrypted as peer-to-peer message or unencrypted over the broadcast channel.
-         * Users can check the destination address to distinguish it.
-         */
-        ESP_LOGD(TAG, "Receive broadcast ESPNOW data");
-    } else {
-        ESP_LOGD(TAG, "Receive unicast ESPNOW data");
-    }
-
-    evt.id = EXAMPLE_ESPNOW_RECV_CB;
-    memcpy(recv_cb->mac_addr, mac_addr, ESP_NOW_ETH_ALEN);
-    recv_cb->data = malloc(len);
-    if (recv_cb->data == NULL) {
+    recv_cb.rssi = recv_info->rx_ctrl->rssi;
+    memcpy(recv_cb.mac_addr, mac_addr, ESP_NOW_ETH_ALEN);
+    recv_cb.data = malloc(len);
+    if (recv_cb.data == NULL) {
         ESP_LOGE(TAG, "Malloc receive data fail");
         return;
     }
-    memcpy(recv_cb->data, data, len);
-    recv_cb->data_len = len;
-    if (xQueueSend(s_espnow_queue, &evt, ESPNOW_MAXDELAY) != pdTRUE) {
+    memcpy(recv_cb.data, data, len);
+    recv_cb.data_len = len;
+    if (xQueueSend(s_espnow_queue, &recv_cb, ESPNOW_MAXDELAY) != pdTRUE) {
         ESP_LOGW(TAG, "Send receive queue fail");
-        free(recv_cb->data);
+        free(recv_cb.data);
     }
 }
 
@@ -107,49 +127,40 @@ int espnow_data_validate(uint8_t *data, uint16_t data_len)
 
 static void espnow_task(void *pvParameter)
 {
-    example_espnow_event_t evt;
+    espnow_event_recv_cb_t recv_cb;
     int ret;
 
     vTaskDelay(5000 / portTICK_PERIOD_MS);
     ESP_LOGI(TAG, "Start espnow task");
 
-    while (xQueueReceive(s_espnow_queue, &evt, portMAX_DELAY) == pdTRUE) {
-        switch (evt.id) {
-            case EXAMPLE_ESPNOW_RECV_CB:
-            {
-                example_espnow_event_recv_cb_t *recv_cb = &evt.info.recv_cb;
+    while (xQueueReceive(s_espnow_queue, &recv_cb, portMAX_DELAY) == pdTRUE) {
 
-                ret = espnow_data_validate(recv_cb->data, recv_cb->data_len);
+                ret = espnow_data_validate(recv_cb.data, recv_cb.data_len);
 
-                if (ret == 0x7601 && recv_cb->data_len == sizeof(espnow_data_7601_t)) {
-                    ESP_LOGI(TAG, "Receive broadcast data from: "MACSTR", len: %d", MAC2STR(recv_cb->mac_addr), recv_cb->data_len);
+                if (ret == 0x7601 && recv_cb.data_len == sizeof(espnow_data_7601_t)) {
+                    ESP_LOGI(TAG, "Receive broadcast data from: "MACSTR", len: %d", MAC2STR(recv_cb.mac_addr), recv_cb.data_len);
 
-                    espnow_data_7601_t *data_7601 = (espnow_data_7601_t *)recv_cb->data;
+                    espnow_data_7601_t *data_7601 = (espnow_data_7601_t *)recv_cb.data;
                     ESP_LOGI(TAG, "Boot count: %lu, weight: %d, voltage: %f", data_7601->bootCount, data_7601->weight, data_7601->voltage);
 
-                    for (int i = 0; i < recv_cb->data_len; i++) {
-                        ESP_LOGI(TAG, "Received data, byte %d: 0x%02X", i, ((unsigned char *)recv_cb->data)[i]);
+                    for (int i = 0; i < recv_cb.data_len; i++) {
+                        ESP_LOGI(TAG, "Received data, byte %d: 0x%02X", i, ((unsigned char *)recv_cb.data)[i]);
                     }
                 }
                 else {
-                    ESP_LOGI(TAG, "Receive error data from: "MACSTR"", MAC2STR(recv_cb->mac_addr));
-                    for (int i = 0; i < recv_cb->data_len; i++) {
-                        ESP_LOGI(TAG, "Received data, byte %d: 0x%02X", i, ((unsigned char *)recv_cb->data)[i]);
+                    ESP_LOGI(TAG, "Receive error data from: "MACSTR"", MAC2STR(recv_cb.mac_addr));
+                    for (int i = 0; i < recv_cb.data_len; i++) {
+                        ESP_LOGI(TAG, "Received data, byte %d: 0x%02X", i, ((unsigned char *)recv_cb.data)[i]);
                     }
                 }
-                free(recv_cb->data);
+                free(recv_cb.data);
                 break;
-            }
-            default:
-                ESP_LOGE(TAG, "Callback type error: %d", evt.id);
-                break;
-        }
     }
 }
 
 static esp_err_t espnow_init(void)
 {
-    s_espnow_queue = xQueueCreate(ESPNOW_QUEUE_SIZE, sizeof(example_espnow_event_t));
+    s_espnow_queue = xQueueCreate(ESPNOW_QUEUE_SIZE, sizeof(espnow_event_recv_cb_t));
     if (s_espnow_queue == NULL) {
         ESP_LOGE(TAG, "Create mutex fail");
         return ESP_FAIL;
