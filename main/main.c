@@ -5,11 +5,13 @@
 #include "azure_sample_connection.h"
 #include "sensors.h"
 #include "ble_scan.h"
+#include "espnow_scan.h"
 
 void app_main(void)
 {
-    ble_scan_init();
-    connectivity_init();
-    vStartSensorsLoop();
-    vStartAzureIoT();
+    espnow_scan_init();
+    // ble_scan_init();
+    // connectivity_init();
+    // vStartSensorsLoop();
+    // vStartAzureIoT();
 }

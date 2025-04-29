@@ -135,9 +135,9 @@ static void process_ble_adv(const uint8_t *data, uint8_t data_len, const char *a
     // Print device address and RSSI
     ESP_LOGI(TAG, "Device Address: %s, RSSI: %d", addr_str, rssi);
 
-    // Manufacturer data 0xEF71
+    // Manufacturer data 0xEF72
     if (fields.mfg_data_len >= 14 && 
-        fields.mfg_data[0] == 0x71 && fields.mfg_data[1] == 0xEF) {
+        fields.mfg_data[0] == 0x72 && fields.mfg_data[1] == 0xEF) {
         print_adv_fields(&fields, addr_str, rssi);
 
         float battery_voltage = 0.03125 * fields.mfg_data[2];

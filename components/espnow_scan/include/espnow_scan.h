@@ -1,0 +1,1 @@
+void espnow_scan_init(void);
