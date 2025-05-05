@@ -43,7 +43,7 @@
 
 // Create a message structure that includes the length
 typedef struct {
-    uint8_t data[ AZURE_IOT_TELEMETRY_MAXLEN ]; // Fixed buffer size
+    uint8_t *data;
     size_t length;     // Actual data length
     char source[32];   // Source identifier
 } TelemetryMessage_t;
@@ -85,9 +85,9 @@ BaseType_t azure_iot_queue_telemetry(uint8_t *pucMessage, size_t xMessageLength,
     TelemetryMessage_t message;
     
     // Ensure we don't exceed the queue item size
-    if (xMessageLength > sizeof(message.data)) {
-        xMessageLength = sizeof(message.data);
-        LogWarn(("Message truncated to fit queue item size"));
+    if (xMessageLength > AZURE_IOT_TELEMETRY_MAXLEN) {
+        xMessageLength = AZURE_IOT_TELEMETRY_MAXLEN;
+        LogWarn(("Message truncated to fit AZURE IOT TELEMETRY MAXLEN"));
     }
 
     // Before sending to queue
@@ -99,6 +99,11 @@ BaseType_t azure_iot_queue_telemetry(uint8_t *pucMessage, size_t xMessageLength,
     }
 
     // Copy message data and length
+    message.data = malloc(xMessageLength);
+    if (message.data == NULL) {
+        LogWarn(("Malloc receive data fail"));
+        return pdFAIL;
+    }
     memcpy(message.data, pucMessage, xMessageLength);
     message.length = xMessageLength;
     
@@ -570,6 +575,7 @@ static void prvAzureDemoTask( void * pvParameters )
                         
                         // Copy data to scratch buffer if needed, or use directly
                         memcpy(ucScratchBuffer, receivedMessage.data, receivedMessage.length);
+                        free(receivedMessage.data);
                         ulScratchBufferLength = receivedMessage.length;
                         
                         // Create a bag of properties for the telemetry (or reset if already exists)

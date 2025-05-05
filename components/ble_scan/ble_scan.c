@@ -133,7 +133,7 @@ static void process_ble_adv(const uint8_t *data, uint8_t data_len, const char *a
     }
     
     // Print device address and RSSI
-    ESP_LOGI(TAG, "Device Address: %s, RSSI: %d", addr_str, rssi);
+    ESP_LOGD(TAG, "Device Address: %s, RSSI: %d", addr_str, rssi);
 
     // Manufacturer data 0xEF72
     if (fields.mfg_data_len >= 14 && 
@@ -190,8 +190,8 @@ static void process_ble_data_task(void *param)
         if (xQueueReceive(ble_adv_queue, &adv_data, portMAX_DELAY) == pdTRUE) {
             // Process the advertisement data
             process_ble_adv(adv_data.raw_data, adv_data.data_len, adv_data.addr_str, adv_data.rssi);
-            ESP_LOGI(TAG, "This thread has %u bytes free stack\n", uxTaskGetStackHighWaterMark(NULL));
-            ESP_LOGI(TAG, "Minimum free heap size: %"PRIu32" bytes\n", esp_get_minimum_free_heap_size());
+            ESP_LOGD(TAG, "This thread has %u bytes free stack\n", uxTaskGetStackHighWaterMark(NULL));
+            ESP_LOGD(TAG, "Minimum free heap size: %"PRIu32" bytes\n", esp_get_minimum_free_heap_size());
         }
     }
     

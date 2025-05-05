@@ -15,10 +15,7 @@
 #include "esp_now.h"
 #include "esp_crc.h"
 
-
-/* ESPNOW can work in both station and softap mode. It is configured in menuconfig. */
-#define ESPNOW_WIFI_MODE WIFI_MODE_STA
-#define ESPNOW_WIFI_IF   ESP_IF_WIFI_STA
+#include "azure-iot.h"
 
 #define ESPNOW_QUEUE_SIZE           6
 
@@ -26,7 +23,7 @@
 
 /* When ESPNOW receiving callback function is called, post event to ESPNOW task. */
 typedef struct {
-    uint8_t mac_addr[ESP_NOW_ETH_ALEN];
+    char addr_str[18]; // XX:XX:XX:XX:XX:XX\0
     signed rssi;
     uint8_t *data;
     int data_len;
@@ -64,13 +61,25 @@ static void example_wifi_init(void)
     wifi_init_config_t cfg = WIFI_INIT_CONFIG_DEFAULT();
     ESP_ERROR_CHECK( esp_wifi_init(&cfg) );
     ESP_ERROR_CHECK( esp_wifi_set_storage(WIFI_STORAGE_RAM) );
-    ESP_ERROR_CHECK( esp_wifi_set_mode(ESPNOW_WIFI_MODE) );
+    ESP_ERROR_CHECK( esp_wifi_set_mode(WIFI_MODE_STA) );
     ESP_ERROR_CHECK( esp_wifi_start());
-    ESP_ERROR_CHECK( esp_wifi_set_channel(CONFIG_ESPNOW_CHANNEL, WIFI_SECOND_CHAN_NONE));
+    ESP_ERROR_CHECK( esp_wifi_set_channel(1, WIFI_SECOND_CHAN_NONE));
 
 #if CONFIG_ESPNOW_ENABLE_LONG_RANGE
-    ESP_ERROR_CHECK( esp_wifi_set_protocol(ESPNOW_WIFI_IF, WIFI_PROTOCOL_11B|WIFI_PROTOCOL_11G|WIFI_PROTOCOL_11N|WIFI_PROTOCOL_LR) );
+    ESP_ERROR_CHECK( esp_wifi_set_protocol(ESP_IF_WIFI_STA, WIFI_PROTOCOL_11B|WIFI_PROTOCOL_11G|WIFI_PROTOCOL_11N|WIFI_PROTOCOL_LR) );
 #endif
+}
+
+static char *addr_to_str(const uint8_t *addr)
+{
+    static char buf[18];
+    
+    // Format: XX:XX:XX:XX:XX:XX
+    sprintf(buf, "%02x:%02x:%02x:%02x:%02x:%02x",
+           addr[5], addr[4], addr[3],
+           addr[2], addr[1], addr[0]);
+    
+    return buf;
 }
 
 /* ESPNOW sending or receiving callback function is called in WiFi task.
@@ -87,7 +96,11 @@ static void example_espnow_recv_cb(const esp_now_recv_info_t *recv_info, const u
     }
 
     recv_cb.rssi = recv_info->rx_ctrl->rssi;
-    memcpy(recv_cb.mac_addr, mac_addr, ESP_NOW_ETH_ALEN);
+
+    // Copy device address
+    strncpy(recv_cb.addr_str, addr_to_str(mac_addr), sizeof(recv_cb.addr_str) - 1);
+    recv_cb.addr_str[sizeof(recv_cb.addr_str) - 1] = '\0'; // Ensure null termination
+
     recv_cb.data = malloc(len);
     if (recv_cb.data == NULL) {
         ESP_LOGE(TAG, "Malloc receive data fail");
@@ -125,6 +138,44 @@ int espnow_data_validate(uint8_t *data, uint16_t data_len)
     return -1;
 }
 
+/* Process advertisement data */
+// size of TelemetryBuffer is AZURE_IOT_TELEMETRY_MAXLEN
+size_t process_espnow_data(uint8_t *TelemetryBuffer, uint16_t version, const uint8_t *data, uint8_t data_len, const char *addr_str, int8_t rssi)
+{
+    size_t TelemetryBufferLength = 0;
+
+    if (version == 0x7601 && data_len == sizeof(espnow_data_7601_t))
+    {
+        ESP_LOGI(TAG, "Receive broadcast data from: %s, len: %d, rssi: %d", addr_str, data_len, rssi);
+
+        espnow_data_7601_t *data_7601 = (espnow_data_7601_t *)data;
+        ESP_LOGI(TAG, "Boot count: %lu, weight: %d, voltage: %f", data_7601->bootCount, data_7601->weight, data_7601->voltage);
+
+        // Create JSON with all required variables
+        TelemetryBufferLength = snprintf((char *)TelemetryBuffer, AZURE_IOT_TELEMETRY_MAXLEN,
+                                         "{\"battery_voltage\":%.2f,\"boot_count\":%lu,\"weight\":%u}",
+                                         data_7601->voltage, data_7601->bootCount, data_7601->weight);
+
+        // Check for snprintf buffer overflow
+        if (TelemetryBufferLength >= AZURE_IOT_TELEMETRY_MAXLEN)
+        {
+            ESP_LOGW(TAG, "JSON message truncated, original length: %d", TelemetryBufferLength);
+            TelemetryBufferLength = AZURE_IOT_TELEMETRY_MAXLEN - 1;
+        }
+
+        ESP_LOGI(TAG, "Sensor data prepared: %s", TelemetryBuffer);
+    }
+    else
+    {
+        ESP_LOGI(TAG, "Receive error data from: %s", addr_str);
+        for (int i = 0; i < data_len; i++)
+        {
+            ESP_LOGI(TAG, "Received data, byte %d: 0x%02X", i, ((unsigned char *)data)[i]);
+        }
+    }
+    return TelemetryBufferLength;
+}
+
 static void espnow_task(void *pvParameter)
 {
     espnow_event_recv_cb_t recv_cb;
@@ -133,28 +184,29 @@ static void espnow_task(void *pvParameter)
     vTaskDelay(5000 / portTICK_PERIOD_MS);
     ESP_LOGI(TAG, "Start espnow task");
 
-    while (xQueueReceive(s_espnow_queue, &recv_cb, portMAX_DELAY) == pdTRUE) {
+    while (1) {
+        if (xQueueReceive(s_espnow_queue, &recv_cb, portMAX_DELAY) == pdTRUE) {
 
-                ret = espnow_data_validate(recv_cb.data, recv_cb.data_len);
+            ret = espnow_data_validate(recv_cb.data, recv_cb.data_len);
 
-                if (ret == 0x7601 && recv_cb.data_len == sizeof(espnow_data_7601_t)) {
-                    ESP_LOGI(TAG, "Receive broadcast data from: "MACSTR", len: %d", MAC2STR(recv_cb.mac_addr), recv_cb.data_len);
+            // Variable declarations
+            uint8_t TelemetryBuffer[AZURE_IOT_TELEMETRY_MAXLEN];
+            size_t TelemetryBufferLength = 0;
+            BaseType_t queueResult;
 
-                    espnow_data_7601_t *data_7601 = (espnow_data_7601_t *)recv_cb.data;
-                    ESP_LOGI(TAG, "Boot count: %lu, weight: %d, voltage: %f", data_7601->bootCount, data_7601->weight, data_7601->voltage);
+            TelemetryBufferLength = process_espnow_data(TelemetryBuffer, ret, recv_cb.data, recv_cb.data_len, recv_cb.addr_str, recv_cb.rssi);
 
-                    for (int i = 0; i < recv_cb.data_len; i++) {
-                        ESP_LOGI(TAG, "Received data, byte %d: 0x%02X", i, ((unsigned char *)recv_cb.data)[i]);
-                    }
+            if (TelemetryBufferLength > 0) {
+                // Queue the telemetry data with addr_str as source identifier
+                queueResult = azure_iot_queue_telemetry(TelemetryBuffer, TelemetryBufferLength, recv_cb.addr_str);
+                if (queueResult != pdPASS) {
+                    ESP_LOGE(TAG, "Failed to queue telemetry data");
+                } else {
+                    ESP_LOGI(TAG, "Successfully queued telemetry data from device: %s", recv_cb.addr_str);
                 }
-                else {
-                    ESP_LOGI(TAG, "Receive error data from: "MACSTR"", MAC2STR(recv_cb.mac_addr));
-                    for (int i = 0; i < recv_cb.data_len; i++) {
-                        ESP_LOGI(TAG, "Received data, byte %d: 0x%02X", i, ((unsigned char *)recv_cb.data)[i]);
-                    }
-                }
-                free(recv_cb.data);
-                break;
+            }
+            free(recv_cb.data);
+        }
     }
 }
 
@@ -182,14 +234,14 @@ static esp_err_t espnow_init(void)
         return ESP_FAIL;
     }
     memset(peer, 0, sizeof(esp_now_peer_info_t));
-    peer->channel = CONFIG_ESPNOW_CHANNEL;
-    peer->ifidx = ESPNOW_WIFI_IF;
+    peer->channel = 1;
+    peer->ifidx = ESP_IF_WIFI_STA;
     peer->encrypt = false;
     memcpy(peer->peer_addr, s_broadcast_mac, ESP_NOW_ETH_ALEN);
     ESP_ERROR_CHECK( esp_now_add_peer(peer) );
     free(peer);
 
-    xTaskCreate(espnow_task, "espnow_task", 4096, NULL, 4, NULL);
+    xTaskCreate(espnow_task, "espnow_task", 8192, NULL, 4, NULL);
 
     return ESP_OK;
 }
@@ -204,6 +256,6 @@ void espnow_scan_init(void)
     }
     ESP_ERROR_CHECK( ret );
 
-    example_wifi_init();
+    // example_wifi_init();
     espnow_init();
 }

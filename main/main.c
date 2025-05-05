@@ -9,9 +9,9 @@
 
 void app_main(void)
 {
+    connectivity_init();
+    vStartSensorsLoop();
+    vStartAzureIoT();
+    ble_scan_init();
     espnow_scan_init();
-    // ble_scan_init();
-    // connectivity_init();
-    // vStartSensorsLoop();
-    // vStartAzureIoT();
 }
