@@ -128,6 +128,7 @@ static esp_netif_t * wifi_start(void)
 {
     char * desc;
     wifi_init_config_t cfg = WIFI_INIT_CONFIG_DEFAULT();
+    cfg.wifi_task_core_id = 0;  // Pin Wi-Fi tasks to core 1
 
     ESP_ERROR_CHECK(esp_wifi_init(&cfg));
 

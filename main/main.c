@@ -13,5 +13,5 @@ void app_main(void)
     vStartSensorsLoop();
     vStartAzureIoT();
     ble_scan_init();
-    espnow_scan_init();
+    // espnow_scan_init();
 }

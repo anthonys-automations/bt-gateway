@@ -33,6 +33,8 @@ typedef struct {
 // Queue handle for BLE advertisement data
 static QueueHandle_t ble_adv_queue = NULL;
 
+int advPerMinute = 0;
+
 /* Convert BLE address to string */
 static char *addr_to_str(const ble_addr_t *addr)
 {
@@ -138,7 +140,9 @@ static void process_ble_adv(const uint8_t *data, uint8_t data_len, const char *a
     // Manufacturer data 0xEF72
     if (fields.mfg_data_len >= 14 && 
         fields.mfg_data[0] == 0x72 && fields.mfg_data[1] == 0xEF) {
-        print_adv_fields(&fields, addr_str, rssi);
+        // print_adv_fields(&fields, addr_str, rssi);
+        advPerMinute++;
+        ESP_LOGI(TAG, "Advertisements per minute so far: %d  ", advPerMinute);
 
         float battery_voltage = 0.03125 * fields.mfg_data[2];
         float chip_temperature = 0.01 * ( (fields.mfg_data[4] << 8) | fields.mfg_data[3]);
@@ -167,12 +171,12 @@ static void process_ble_adv(const uint8_t *data, uint8_t data_len, const char *a
         ESP_LOGI(TAG, "Sensor data prepared: %s", TelemetryBuffer);
 
         // Queue the telemetry data with addr_str as source identifier
-        queueResult = azure_iot_queue_telemetry(TelemetryBuffer, TelemetryBufferLength, addr_str);
-        if (queueResult != pdPASS) {
-            ESP_LOGE(TAG, "Failed to queue telemetry data");
-        } else {
-            ESP_LOGI(TAG, "Successfully queued telemetry data from device: %s", addr_str);
-        }
+        // queueResult = azure_iot_queue_telemetry(TelemetryBuffer, TelemetryBufferLength, addr_str);
+        // if (queueResult != pdPASS) {
+        //     ESP_LOGE(TAG, "Failed to queue telemetry data");
+        // } else {
+        //     ESP_LOGI(TAG, "Successfully queued telemetry data from device: %s", addr_str);
+        // }
     }
 }
 
@@ -214,9 +218,11 @@ static void ble_scan(void)
         ESP_LOGE(TAG, "error determining address type; rc=%d", rc);
         return;
     }
+    ESP_LOGI(TAG, "====================================================================>>>> Advertisements per minute: %d <<<<================  ", advPerMinute);
+    advPerMinute = 0;
 
     /* Filter duplicates during the 60-second scan period */
-    disc_params.filter_duplicates = 1;
+    disc_params.filter_duplicates = 0;
     /**
      * Perform a passive scan.  I.e., don't send follow-up scan requests to
      * each advertiser.
@@ -224,8 +230,8 @@ static void ble_scan(void)
     disc_params.passive = 1;
 
     /* Use defaults for the rest of the parameters. */
-    disc_params.itvl = 0;
-    disc_params.window = 0;
+    disc_params.itvl = 100;
+    disc_params.window = 100;
     disc_params.filter_policy = 0;
     disc_params.limited = 0;
 
@@ -335,15 +341,16 @@ void ble_scan_init(void)
     }
     
     // Create the task to process BLE advertisement data
-    BaseType_t task_created = xTaskCreate(
-        process_ble_data_task,        // Task function
-        "ble_proc_task",              // Task name
-        PROCESS_TASK_STACK_SIZE,      // Stack size
-        NULL,                         // Parameters
-        PROCESS_TASK_PRIORITY,        // Priority
-        NULL                          // Task handle
+    BaseType_t task_created = xTaskCreatePinnedToCore(
+        process_ble_data_task,   // Task function
+        "ble_proc_task",         // Task name
+        PROCESS_TASK_STACK_SIZE, // Stack size
+        NULL,                    // Parameters
+        PROCESS_TASK_PRIORITY,   // Priority
+        NULL,                    // Task handle
+        1                        // Core
     );
-    
+
     if (task_created != pdPASS) {
         ESP_LOGE(TAG, "Failed to create BLE processing task");
         vQueueDelete(ble_adv_queue);

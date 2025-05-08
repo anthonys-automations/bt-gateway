@@ -57,8 +57,8 @@ QueueHandle_t azure_iot_get_telemetry_queue(void)
     static QueueHandle_t xTelemetryQueue = NULL;
     
     if (xTelemetryQueue == NULL) {
-        // Create a queue to hold 10 message structures (adjust as needed)
-        xTelemetryQueue = xQueueCreate(10, sizeof(TelemetryMessage_t));
+        // Create a queue to hold 40 message structures (adjust as needed)
+        xTelemetryQueue = xQueueCreate(40, sizeof(TelemetryMessage_t));
         
         if (xTelemetryQueue == NULL) {
             LogError(("Failed to create telemetry queue"));
@@ -854,12 +854,14 @@ void vStartAzureIoT( void )
 {
     /* This example uses a single application task, which in turn is used to
      * connect, subscribe, publish, unsubscribe and disconnect from the IoT Hub */
-    xTaskCreate( prvAzureDemoTask,         /* Function that implements the task. */
-                 "AzureDemoTask",          /* Text name for the task - only used for debugging. */
-                 8192, /* Size of stack (in words, not bytes) to allocate for the task. */
-                 NULL,                     /* Task parameter - not used in this case. */
-                 tskIDLE_PRIORITY,         /* Task priority, must be between 0 and configMAX_PRIORITIES - 1. */
-                 NULL );                   /* Used to pass out a handle to the created task - not used in this case. */
+    xTaskCreatePinnedToCore(prvAzureDemoTask, /* Function that implements the task. */
+                            "AzureDemoTask",  /* Text name for the task - only used for debugging. */
+                            8192,             /* Size of stack (in words, not bytes) to allocate for the task. */
+                            NULL,             /* Task parameter - not used in this case. */
+                            tskIDLE_PRIORITY, /* Task priority, must be between 0 and configMAX_PRIORITIES - 1. */
+                            NULL,             // Task handle
+                            1                 // Core
+    );
 }
 /*-----------------------------------------------------------*/
 

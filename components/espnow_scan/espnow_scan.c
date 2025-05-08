@@ -241,7 +241,7 @@ static esp_err_t espnow_init(void)
     ESP_ERROR_CHECK( esp_now_add_peer(peer) );
     free(peer);
 
-    xTaskCreate(espnow_task, "espnow_task", 8192, NULL, 4, NULL);
+    xTaskCreatePinnedToCore(espnow_task, "espnow_task", 8192, NULL, 4, NULL, 1);
 
     return ESP_OK;
 }

@@ -47,6 +47,45 @@ esp_err_t sensors_init(void)
     return ESP_OK;
 }
 
+#include "freertos/FreeRTOS.h"
+#include "freertos/task.h"
+
+#include <stdlib.h>
+
+void print_task_core_mapping() {
+    const UBaseType_t num_tasks = uxTaskGetNumberOfTasks();
+    TaskStatus_t *task_status_array = malloc(num_tasks * sizeof(TaskStatus_t));
+
+    if (task_status_array == NULL) {
+        ESP_LOGE("CORE_MAP", "Failed to allocate memory");
+        return;
+    }
+
+    UBaseType_t actual_tasks = uxTaskGetSystemState(task_status_array, num_tasks, NULL);
+    ESP_LOGI("CORE_MAP", "Currently running %d tasks:", actual_tasks);
+    ESP_LOGI("CORE_MAP", "Task Name           | Core | Priority | State | Free Stack (words)");
+
+    for (int i = 0; i < actual_tasks; i++) {
+        TaskStatus_t info;
+        vTaskGetInfo(task_status_array[i].xHandle, &info, pdTRUE, eInvalid);
+
+        BaseType_t core_id = xTaskGetAffinity(info.xHandle);
+        if (core_id == tskNO_AFFINITY) {
+            core_id = -1;
+        }
+
+        UBaseType_t free_stack = uxTaskGetStackHighWaterMark(info.xHandle);
+
+        ESP_LOGI("CORE_MAP", "%-19s | %4ld | %8u | %5d | %17u",
+                 info.pcTaskName,
+                 (long)core_id,
+                 info.uxCurrentPriority,
+                 info.eCurrentState,
+                 free_stack);
+    }
+    free(task_status_array);
+}
+
 static uint8_t TelemetryBuffer[ AZURE_IOT_TELEMETRY_MAXLEN ];
 uint32_t TelemetryBufferLength = 0U;
 
@@ -65,6 +104,7 @@ static void sensors_loop( void * pvParameters )
         led_set(0,10,0);
 
         // hdc1080_main_request_readings();
+        print_task_core_mapping();
 
         err = sensors_get_json((char *)TelemetryBuffer, sizeof(TelemetryBuffer));
         if (err != ESP_OK) {
@@ -129,12 +169,14 @@ void vStartSensorsLoop( void )
 
     /* This example uses a single application task, which in turn is used to
      * connect, subscribe, publish, unsubscribe and disconnect from the IoT Hub */
-    xTaskCreate( sensors_loop,         /* Function that implements the task. */
-                 "SensorsLoop",          /* Text name for the task - only used for debugging. */
-                 8192, /* Size of stack (in words, not bytes) to allocate for the task. */
-                 NULL,                     /* Task parameter - not used in this case. */
-                 tskIDLE_PRIORITY,         /* Task priority, must be between 0 and configMAX_PRIORITIES - 1. */
-                 NULL );                   /* Used to pass out a handle to the created task - not used in this case. */
+    xTaskCreatePinnedToCore(sensors_loop,     /* Function that implements the task. */
+                "SensorsLoop",    /* Text name for the task - only used for debugging. */
+                4096,             /* Size of stack (in words, not bytes) to allocate for the task. */
+                NULL,             /* Task parameter - not used in this case. */
+                tskIDLE_PRIORITY, /* Task priority, must be between 0 and configMAX_PRIORITIES - 1. */
+                NULL,             // Task handle
+                1                 // Core
+    );
 }
 /*-----------------------------------------------------------*/
 
